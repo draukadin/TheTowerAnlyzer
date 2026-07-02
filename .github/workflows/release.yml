@@ -182,6 +182,6 @@ jobs:
 
             On first launch a setup wizard will guide you through connecting your submission method (Android app or iOS Shortcut) and entering your Player ID.
 
-            See the [Setup Guide](https://github.com/draukadin/TheTowerAnlyzer/blob/master/resources/Centralized_Setup_Guide.md) for step-by-step instructions.
+            See the [Setup Guide](https://github.com/draukadin/TheTowerAnalyzer/blob/master/resources/Centralized_Setup_Guide.md) for step-by-step instructions.
           files: installers/*
           generate_release_notes: true
