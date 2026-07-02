@@ -21,7 +21,7 @@ public class LabRepository {
                           int currentLevel, Integer targetLevel,
                           String description, String unlock) {}
 
-    public record LabLevelCost(int level, Integer durationSeconds, Double coinCost) {}
+    public record LabLevelCost(int level, Long durationSeconds, Double coinCost) {}
 
     public record LabMultipliers(double speedMult, double costMult,
                                   int labsSpeedLevel, int coinDiscountLevel,
@@ -128,7 +128,7 @@ public class LabRepository {
                     map.computeIfAbsent(labId, k -> new java.util.ArrayList<>())
                        .add(new LabLevelCost(
                                rs.getInt("level"),
-                               rs.getObject("duration_seconds") != null ? rs.getInt("duration_seconds") : null,
+                               rs.getObject("duration_seconds") != null ? rs.getLong("duration_seconds") : null,
                                rs.getObject("coin_cost") != null ? rs.getDouble("coin_cost") : null));
                     return null;
                 });
@@ -144,7 +144,7 @@ public class LabRepository {
                 """,
                 (rs, i) -> new LabLevelCost(
                         rs.getInt("level"),
-                        rs.getObject("duration_seconds") != null ? rs.getInt("duration_seconds") : null,
+                        rs.getObject("duration_seconds") != null ? rs.getLong("duration_seconds") : null,
                         rs.getObject("coin_cost") != null ? rs.getDouble("coin_cost") : null
                 ), labId);
     }

@@ -300,6 +300,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'get_shortest_labs_to_max',
+      description: 'Given a time budget in days, list labs (not yet maxed) that can be fully researched to max level within that budget, with total remaining coin cost and duration after current speed/cost multipliers are applied. Sorted shortest-duration first. Use to suggest quick-win labs for an idle lab slot.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          maxDays: {
+            type: 'integer',
+            description: 'Maximum research duration budget, in days',
+          },
+          cellSpeedMulti: {
+            type: 'number',
+            description: 'Additional cell-speed multiplier from the target slot\'s equipped cells (default: 1.0). Use a specific slot\'s cellSpeedMult from get_lab_slots when checking that slot.',
+          },
+        },
+        required: ['maxDays'],
+      },
+    },
+    {
       name: 'get_perks',
       description: 'Get the full perk catalog: id, name, type (Standard/UW/TradeOff), and max picks per run.',
       inputSchema: { type: 'object', properties: {} },
@@ -700,6 +718,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'search_labs':
         return distillLabCatalog(await fetchApi(`/api/labs/search?q=${encodeURIComponent(args.q)}`));
+
+      // ── Shortest labs to max ──────────────────────────────────────────────
+
+      case 'get_shortest_labs_to_max': {
+        const maxDays = args.maxDays;
+        if (!Number.isInteger(maxDays) || maxDays <= 0) throw new Error('maxDays must be a positive integer');
+        const cellSpeedMulti = args.cellSpeedMulti ?? 1.0;
+
+        const params = new URLSearchParams({ maxDays, cellSpeed: cellSpeedMulti });
+        const [costMap, allLabs] = await Promise.all([
+          fetchApi(`/api/labs/shortestLabs?${params}`),
+          fetchApi('/api/labs'),
+        ]);
+        return distillShortestLabsToMax(costMap, allLabs);
+      }
 
       // ── Perk catalog / settings ───────────────────────────────────────────
 
@@ -1717,6 +1750,41 @@ function distillLabCosts(costs) {
     coins_T:  c.coinCost != null ? round(c.coinCost / 1e12, 3) : null,
     days:     c.durationSeconds != null ? round(c.durationSeconds / 86400, 2) : null,
   })));
+}
+
+// ── Distillation: shortest labs to max ───────────────────────────────────────
+
+// Matches the game's own scale suffixes (K/M/B/T/q/Q/...) so small costs never
+// silently round to "0" the way a fixed coins_T (÷1e12) field would.
+const COIN_SCALE_SUFFIXES = [
+  [1e33, 'd'], [1e30, 'N'], [1e27, 'O'], [1e24, 'S'], [1e21, 's'],
+  [1e18, 'Q'], [1e15, 'q'], [1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K'],
+];
+
+function formatCoins(n) {
+  if (!n) return '0';
+  for (const [scale, suffix] of COIN_SCALE_SUFFIXES) {
+    if (n >= scale) return `${round(n / scale, 3)}${suffix}`;
+  }
+  return String(Math.round(n));
+}
+
+function distillShortestLabsToMax(costMap, allLabs) {
+  const labById = new Map(allLabs.map(l => [String(l.id), l]));
+  const labs = Object.entries(costMap)
+    .map(([id, c]) => {
+      const lab = labById.get(id);
+      return {
+        name:     lab?.name     ?? `Lab ${id}`,
+        category: lab?.category ?? null,
+        to_level: c.level,
+        days:     round(c.durationSeconds / 86400, 2),
+        coins:    formatCoins(c.coinCost),
+      };
+    })
+    .sort((a, b) => a.days - b.days);
+
+  return result({ count: labs.length, labs });
 }
 
 // ── Distillation: module leveling cost ───────────────────────────────────────

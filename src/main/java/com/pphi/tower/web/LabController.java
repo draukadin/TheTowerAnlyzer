@@ -4,6 +4,7 @@ import com.pphi.tower.repository.LabRepository;
 import com.pphi.tower.repository.LabRepository.LabData;
 import com.pphi.tower.repository.LabRepository.LabLevelCost;
 import com.pphi.tower.repository.LabRepository.LabMultipliers;
+import com.pphi.tower.service.LabService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,9 +15,11 @@ import java.util.List;
 public class LabController {
 
     private final LabRepository repo;
+    private final LabService labService;
 
-    public LabController(LabRepository repo) {
+    public LabController(LabRepository repo, LabService labService) {
         this.repo = repo;
+        this.labService = labService;
     }
 
     record StateRequest(int currentLevel, Integer targetLevel) {}
@@ -49,5 +52,12 @@ public class LabController {
     @GetMapping("/multipliers")
     public LabMultipliers getMultipliers() {
         return repo.getMultipliers();
+    }
+
+    @GetMapping("/shortestLabs")
+    public java.util.Map<Long, LabLevelCost> getShortestLabsToMax(
+            @RequestParam int maxDays,
+            @RequestParam double cellSpeed) {
+        return labService.shortestLabsToMax(maxDays, cellSpeed);
     }
 }

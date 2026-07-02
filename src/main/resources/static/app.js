@@ -186,7 +186,7 @@ function showView(view){
   // Map each view to its group id
   const viewGroup={
     reports:'grp-reports',versions:'grp-reports',
-    cells:'grp-labs',labspeed:'grp-labs',labs:'grp-labs',labplanner:'grp-labs',
+    cells:'grp-labs',labspeed:'grp-labs',labs:'grp-labs',labplanner:'grp-labs',shortestlabs:'grp-labs',
     shards:'grp-modules',modules:'grp-modules',
     uw:'grp-upgrades',workshop:'grp-upgrades',guardian:'grp-upgrades',bots:'grp-upgrades',cards:'grp-upgrades',
     relics:'grp-collectibles',cosmetics:'grp-collectibles',
@@ -222,6 +222,7 @@ function showView(view){
   else if(view==='versions')renderVersionTrackerView();
   else if(view==='tournament')renderTournamentView();
   else if(view==='labplanner')renderLabPlannerView();
+  else if(view==='shortestlabs')renderShortestLabsView();
   else if(view==='admin')renderAdminView();
   else if(activeId&&activePayload)renderReportView(allReports.find(r=>r.id===activeId),activePayload);
   else document.getElementById('mainContent').innerHTML=`
@@ -2340,6 +2341,92 @@ function renderLabTables(){
 
   if(!html) html = '<div style="color:var(--muted);padding:2rem;text-align:center">No labs match the current filter.</div>';
   document.getElementById('labTablesWrap').innerHTML = html;
+}
+
+// ── Shortest Labs to Max ──────────────────────────────────────────────────────
+
+let slMaxDays = 14;
+let slCellSpeedIdx = 0;
+
+async function renderShortestLabsView(){
+  const speedOpts = LP_SPEEDS.map((s,i) =>
+    `<option value="${i}" ${i===slCellSpeedIdx?'selected':''}>${s.label}</option>`
+  ).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="report-title" style="margin-bottom:0.5rem">Shortest to Max</div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:1.2rem;max-width:640px">
+      Labs that can be fully researched to max level within your time budget — useful for
+      picking quick wins to improve gem rush efficiency.
+    </div>
+    <div class="labs-controls" style="align-items:flex-end">
+      <div class="form-group" style="margin-bottom:0;min-width:140px">
+        <label class="form-label">Max Days</label>
+        <input class="form-input" type="number" min="1" step="1" id="sl-max-days" value="${slMaxDays}">
+      </div>
+      <div class="form-group" style="margin-bottom:0;min-width:140px">
+        <label class="form-label">Cell Speed</label>
+        <select class="form-input" id="sl-cell-speed">${speedOpts}</select>
+      </div>
+      <button class="btn btn-primary" onclick="slCalculate()">Calculate</button>
+    </div>
+    <div id="slResultsWrap"></div>`;
+
+  await slCalculate();
+}
+
+async function slCalculate(){
+  const daysInput = document.getElementById('sl-max-days');
+  const speedSel = document.getElementById('sl-cell-speed');
+  slMaxDays = Math.max(1, parseInt(daysInput.value) || 1);
+  daysInput.value = slMaxDays;
+  slCellSpeedIdx = +speedSel.value;
+  const cellSpeed = LP_SPEEDS[slCellSpeedIdx].value;
+
+  const wrap = document.getElementById('slResultsWrap');
+  wrap.innerHTML = '<div class="loading-placeholder" style="padding:3rem;text-align:center">Loading…</div>';
+
+  try{
+    const params = new URLSearchParams({maxDays: slMaxDays, cellSpeed});
+    const [costMap, allLabs] = await Promise.all([
+      fetch(`${API}/labs/shortestLabs?${params}`).then(r => r.json()),
+      fetch(`${API}/labs`).then(r => r.json()),
+    ]);
+    slRenderResults(costMap, allLabs);
+  }catch(e){
+    wrap.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h2>Failed to load</h2><p>${e.message}</p></div>`;
+  }
+}
+
+function slRenderResults(costMap, allLabs){
+  const labById = new Map(allLabs.map(l => [String(l.id), l]));
+  const rows = Object.entries(costMap)
+    .map(([id, c]) => ({lab: labById.get(id), id, ...c}))
+    .sort((a,b) => a.durationSeconds - b.durationSeconds);
+
+  const wrap = document.getElementById('slResultsWrap');
+  if(!rows.length){
+    wrap.innerHTML = '<div style="color:var(--muted);padding:2rem;text-align:center">No labs can be maxed within that time budget.</div>';
+    return;
+  }
+
+  wrap.innerHTML = `<table class="labs-table" style="margin-top:0.8rem">
+    <thead><tr>
+      <th style="width:35%">Lab</th>
+      <th>Category</th>
+      <th>To Level</th>
+      <th>Time</th>
+      <th>Coin Cost</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `
+      <tr>
+        <td style="font-weight:500">${escHtml(r.lab?.name ?? `Lab ${r.id}`)}</td>
+        <td style="color:var(--muted)">${escHtml(r.lab?.category ?? '—')}</td>
+        <td style="font-family:var(--mono)">${r.level}</td>
+        <td style="font-family:var(--mono);color:var(--accent)">${fmtDuration(r.durationSeconds)}</td>
+        <td style="font-family:var(--mono);color:var(--gold)">${fmtRaw(r.coinCost)}</td>
+      </tr>`).join('')}</tbody>
+  </table>`;
 }
 
 async function labSetLevel(id, newLevel){
