@@ -34,6 +34,25 @@ class TowerNumberTest {
         assertThat(n.toString()).isEqualTo("0.00M");
     }
 
+    // ── toDouble ────────────────────────────────────────────────────────────
+
+    @Test
+    void toDouble_withSuffix() {
+        var n = TowerNumberFactory.of(1.5, ScaleSuffix.MILLION);
+        assertThat(n.toDouble()).isEqualTo(1_500_000.0);
+    }
+
+    @Test
+    void toDouble_noSuffix() {
+        var n = new TowerNumber(BigDecimal.valueOf(500), null);
+        assertThat(n.toDouble()).isEqualTo(500.0);
+    }
+
+    @Test
+    void toDouble_zero() {
+        assertThat(TowerNumberFactory.zero().toDouble()).isEqualTo(0.0);
+    }
+
     // ── minus: same suffix ──────────────────────────────────────────────────
 
     @Test

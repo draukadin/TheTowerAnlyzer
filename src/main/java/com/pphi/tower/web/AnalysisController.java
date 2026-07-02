@@ -3,14 +3,19 @@ package com.pphi.tower.web;
 import com.pphi.tower.config.AppConfig;
 import com.pphi.tower.service.CellIncomeService;
 import com.pphi.tower.service.GtIncomeService;
+import com.pphi.tower.service.IncomeTrendService;
 import com.pphi.tower.service.ShardAnalysisService;
 import com.pphi.tower.service.SlCoverageService;
 import com.pphi.tower.web.dto.CellIncomeDto;
 import com.pphi.tower.web.dto.GtIncomeProjectionDto;
+import com.pphi.tower.web.dto.IncomeTrendDto;
 import com.pphi.tower.web.dto.LabSpeedDto;
+import com.pphi.tower.web.dto.RunFilterOptionsDto;
 import com.pphi.tower.web.dto.ShardRateDto;
 import com.pphi.tower.web.dto.SlCoverageEfficiencyDto;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/analysis")
@@ -23,17 +28,20 @@ public class AnalysisController {
     private final ShardAnalysisService shardAnalysisService;
     private final GtIncomeService gtIncomeService;
     private final SlCoverageService slCoverageService;
+    private final IncomeTrendService incomeTrendService;
     private final AppConfig config;
 
     public AnalysisController(CellIncomeService cellIncomeService,
                               ShardAnalysisService shardAnalysisService,
                               GtIncomeService gtIncomeService,
                               SlCoverageService slCoverageService,
+                              IncomeTrendService incomeTrendService,
                               AppConfig config) {
         this.cellIncomeService = cellIncomeService;
         this.shardAnalysisService = shardAnalysisService;
         this.gtIncomeService = gtIncomeService;
         this.slCoverageService = slCoverageService;
+        this.incomeTrendService = incomeTrendService;
         this.config = config;
     }
 
@@ -97,6 +105,19 @@ public class AnalysisController {
             @RequestParam(required = false) Integer quantityNextStoneCost) {
         return slCoverageService.compute(angleLevel, quantityLevel, angleDegrees, quantityBeams,
                 angleNextStoneCost, quantityNextStoneCost);
+    }
+
+    @GetMapping("/income-trend")
+    public IncomeTrendDto getIncomeTrend(
+            @RequestParam(required = false) Integer days,
+            @RequestParam(required = false) List<Integer> tier,
+            @RequestParam(required = false) List<String> runType) {
+        return incomeTrendService.getIncomeTrend(days, tier, runType);
+    }
+
+    @GetMapping("/income-trend/filters")
+    public RunFilterOptionsDto getIncomeTrendFilters() {
+        return incomeTrendService.getFilterOptions();
     }
 
     @GetMapping("/lab-speed")
