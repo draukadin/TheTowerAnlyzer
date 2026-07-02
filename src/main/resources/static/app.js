@@ -179,13 +179,16 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.nav-group')){
     document.querySelectorAll('.nav-group.open').forEach(g=>g.classList.remove('open'));
   }
+  if(!e.target.closest('.filter-dropdown')){
+    document.querySelectorAll('.filter-dropdown.open').forEach(d=>d.classList.remove('open'));
+  }
 });
 
 function showView(view){
   activeView=view;
   // Map each view to its group id
   const viewGroup={
-    reports:'grp-reports',versions:'grp-reports',
+    reports:'grp-reports',versions:'grp-reports',incometrend:'grp-reports',
     cells:'grp-labs',labspeed:'grp-labs',labs:'grp-labs',labplanner:'grp-labs',shortestlabs:'grp-labs',
     shards:'grp-modules',modules:'grp-modules',
     uw:'grp-upgrades',workshop:'grp-upgrades',guardian:'grp-upgrades',bots:'grp-upgrades',cards:'grp-upgrades',
@@ -205,6 +208,7 @@ function showView(view){
     b.classList.toggle('active',fn.includes(`'${view}'`));
   });
   if(view==='cells')renderCellsView();
+  else if(view==='incometrend')renderIncomeTrendView();
   else if(view==='labspeed')renderLabSpeedView();
   else if(view==='shards')renderShardsView();
   else if(view==='uw')renderUwView();
@@ -679,6 +683,219 @@ async function loadCells(days){
   }catch(e){
     document.getElementById('cellsPanel').innerHTML=`<div style="color:var(--red);padding:1rem">${e.message}</div>`;
   }
+}
+
+// ── Income Trends ────────────────────────────────────────────────────────
+
+let incomeTrendData=null;
+
+async function renderIncomeTrendView(){
+  document.getElementById('mainContent').innerHTML=`
+    <div class="report-title" style="margin-bottom:1rem">Income Trends</div>
+    <div class="window-controls">
+      <label>Window:</label>
+      <input type="range" min="7" max="90" value="30" id="incomeDaysSlider" oninput="updateIncomeDays(this.value)">
+      <span id="incomeDaysLabel">30 days</span>
+      <label style="margin-left:16px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="incomeMetricToggle" onchange="renderIncomeCharts()">
+        Show cumulative earned (instead of rate/hour)
+      </label>
+    </div>
+    <div id="incomeFilters" class="window-controls" style="flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div class="loading-placeholder">Loading filters…</div>
+    </div>
+    <div id="incomeStats" class="stat-grid" style="margin-bottom:1.5rem"></div>
+    <div class="section-title" id="incomeCoinsTitle">Coin Income</div>
+    <div id="incomeCoinsChart" class="chart-container"></div>
+    <div class="section-title" id="incomeCellsTitle">Cell Income</div>
+    <div id="incomeCellsChart" class="chart-container"></div>`;
+  await loadIncomeFilters();
+}
+
+function updateIncomeDays(val){
+  document.getElementById('incomeDaysLabel').textContent=val+' days';
+  loadIncomeTrend(val);
+}
+
+function toggleFilterDropdown(id){
+  const dd=document.getElementById(id);
+  const isOpen=dd.classList.contains('open');
+  document.querySelectorAll('.filter-dropdown.open').forEach(d=>d.classList.remove('open'));
+  if(!isOpen)dd.classList.add('open');
+}
+
+async function loadIncomeFilters(){
+  try{
+    const res=await fetch(`${API}/analysis/income-trend/filters`);
+    const f=await res.json();
+    document.getElementById('incomeFilters').innerHTML=`
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Tier</div>
+        <div class="filter-dropdown" id="incomeTierDropdown">
+          <button type="button" class="filter-dropdown-btn" id="incomeTierDropdownBtn" onclick="toggleFilterDropdown('incomeTierDropdown')">All Tiers</button>
+          <div class="filter-dropdown-panel">
+            ${f.tiers.map(t=>`<label class="filter-chip">
+              <input type="checkbox" class="income-tier-filter" value="${t}" onchange="onIncomeFilterChange()">
+              T${t}
+            </label>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Run Type</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${f.runTypes.map(rt=>`<label class="filter-chip">
+            <input type="checkbox" class="income-runtype-filter" value="${rt}" ${rt.toLowerCase()==='farming'?'checked':''} onchange="onIncomeFilterChange()">
+            ${rt}
+          </label>`).join('')}
+        </div>
+      </div>`;
+    await selectDefaultIncomeTier(f.tiers);
+  }catch(e){
+    document.getElementById('incomeFilters').innerHTML=`<div style="color:var(--red)">${e.message}</div>`;
+  }
+}
+
+async function selectDefaultIncomeTier(tiers){
+  const days=document.getElementById('incomeDaysSlider').value;
+  try{
+    const res=await fetch(`${API}/analysis/income-trend?days=${days}&runType=Farming`);
+    const data=await res.json();
+    const counts={};
+    data.dataPoints.forEach(p=>{counts[p.tier]=(counts[p.tier]||0)+1;});
+    let bestTier=null,bestCount=0;
+    for(const t of tiers){
+      const c=counts[t]||0;
+      if(c>bestCount){bestCount=c;bestTier=t;}
+    }
+    if(bestTier!=null){
+      const cb=document.querySelector(`.income-tier-filter[value="${bestTier}"]`);
+      if(cb)cb.checked=true;
+    }
+  }catch(e){
+    // fall back to no tier filter (all tiers) if the probe request fails
+  }
+  updateIncomeTierButtonLabel();
+  await loadIncomeTrend(days);
+}
+
+function updateIncomeTierButtonLabel(){
+  const btn=document.getElementById('incomeTierDropdownBtn');
+  if(!btn)return;
+  const checked=[...document.querySelectorAll('.income-tier-filter:checked')].map(el=>el.value);
+  btn.textContent=checked.length===0?'All Tiers':checked.length===1?`T${checked[0]}`:`${checked.length} Tiers`;
+}
+
+function onIncomeFilterChange(){
+  updateIncomeTierButtonLabel();
+  loadIncomeTrend(document.getElementById('incomeDaysSlider').value);
+}
+
+function buildIncomeFilterPillsHtml(){
+  const tiers=[...document.querySelectorAll('.income-tier-filter:checked')].map(el=>`T${el.value}`);
+  const runTypes=[...document.querySelectorAll('.income-runtype-filter:checked')].map(el=>el.value);
+  const pills=[...(tiers.length?tiers:['All Tiers']), ...(runTypes.length?runTypes:['All Run Types'])];
+  return pills.map(p=>`<span class="filter-pill">${p}</span>`).join('');
+}
+
+async function loadIncomeTrend(days){
+  try{
+    const tiers=[...document.querySelectorAll('.income-tier-filter:checked')].map(el=>el.value);
+    const runTypes=[...document.querySelectorAll('.income-runtype-filter:checked')].map(el=>el.value);
+    const params=new URLSearchParams({days});
+    tiers.forEach(t=>params.append('tier',t));
+    runTypes.forEach(rt=>params.append('runType',rt));
+
+    const res=await fetch(`${API}/analysis/income-trend?${params.toString()}`);
+    incomeTrendData=await res.json();
+    renderIncomeCharts();
+  }catch(e){
+    document.getElementById('incomeCoinsChart').innerHTML=`<div style="color:var(--red);padding:1rem">${e.message}</div>`;
+  }
+}
+
+function renderIncomeCharts(){
+  if(!incomeTrendData)return;
+  const cumulative=document.getElementById('incomeMetricToggle').checked;
+  const points=incomeTrendData.dataPoints;
+  const pillsHtml=buildIncomeFilterPillsHtml();
+  document.getElementById('incomeCoinsTitle').innerHTML=`Coin Income${pillsHtml}`;
+  document.getElementById('incomeCellsTitle').innerHTML=`Cell Income${pillsHtml}`;
+
+  const totalCoins=points.reduce((s,p)=>s+p.coinsEarned,0);
+  const totalCells=points.reduce((s,p)=>s+p.cellsEarned,0);
+  const avgCph=points.length?points.reduce((s,p)=>s+p.coinsPerHour,0)/points.length:0;
+  const avgCellsph=points.length?points.reduce((s,p)=>s+p.cellsPerHour,0)/points.length:0;
+  document.getElementById('incomeStats').innerHTML=`
+    <div class="stat-card"><div class="label">Runs Analyzed</div><div class="value accent">${incomeTrendData.runsAnalyzed}</div></div>
+    <div class="stat-card"><div class="label">Total Coins Earned</div><div class="value gold">${fmtCoins(totalCoins)}</div></div>
+    <div class="stat-card"><div class="label">Total Cells Earned</div><div class="value green">${fmtRaw(totalCells)}</div></div>
+    <div class="stat-card"><div class="label">Avg Coins/Hour</div><div class="value gold">${fmtCoins(avgCph)}</div></div>
+    <div class="stat-card"><div class="label">Avg Cells/Hour</div><div class="value green">${fmtRaw(avgCellsph)}</div></div>`;
+
+  drawLineChart('incomeCoinsChart', points,
+      p=>cumulative?p.coinsEarned:p.coinsPerHour, '--gold', cumulative?'Coins Earned':'Coins / Hour');
+  drawLineChart('incomeCellsChart', points,
+      p=>cumulative?p.cellsEarned:p.cellsPerHour, '--green', cumulative?'Cells Earned':'Cells / Hour');
+}
+
+function drawLineChart(containerId, points, accessor, colorVar, yLabel){
+  points=[...points].sort((a,b)=>a.battleEpochSeconds-b.battleEpochSeconds);
+  const container=document.getElementById(containerId);
+  container.innerHTML='';
+  const width=container.clientWidth||800, height=260;
+  const margin={top:16,right:24,bottom:30,left:70};
+
+  if(!points.length){
+    container.innerHTML=`<div class="loading-placeholder">No runs in this window</div>`;
+    return;
+  }
+
+  const color=getComputedStyle(document.documentElement).getPropertyValue(colorVar).trim()||'#4f8ef7';
+  const muted=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+
+  const svg=d3.select(container).append('svg')
+      .attr('viewBox',`0 0 ${width} ${height}`)
+      .attr('width','100%').attr('height',height);
+
+  const x=d3.scaleTime()
+      .domain(d3.extent(points,p=>new Date(p.battleEpochSeconds*1000)))
+      .range([margin.left,width-margin.right]);
+  const y=d3.scaleLinear()
+      .domain([0,d3.max(points,accessor)*1.1||1])
+      .range([height-margin.bottom,margin.top]);
+
+  svg.append('g')
+      .attr('transform',`translate(0,${height-margin.bottom})`)
+      .call(d3.axisBottom(x).ticks(6))
+      .call(g=>g.selectAll('text').attr('fill',muted).attr('font-size','11px'))
+      .call(g=>g.selectAll('line,path').attr('stroke',muted).attr('stroke-opacity',0.3));
+
+  svg.append('g')
+      .attr('transform',`translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).ticks(5).tickFormat(v=>fmtRaw(v)))
+      .call(g=>g.selectAll('text').attr('fill',muted).attr('font-size','11px'))
+      .call(g=>g.selectAll('line,path').attr('stroke',muted).attr('stroke-opacity',0.3));
+
+  const line=d3.line()
+      .x(p=>x(new Date(p.battleEpochSeconds*1000)))
+      .y(p=>y(accessor(p)));
+
+  svg.append('path')
+      .datum(points)
+      .attr('fill','none')
+      .attr('stroke',color)
+      .attr('stroke-width',2)
+      .attr('d',line);
+
+  svg.append('g').selectAll('circle')
+      .data(points).enter().append('circle')
+      .attr('cx',p=>x(new Date(p.battleEpochSeconds*1000)))
+      .attr('cy',p=>y(accessor(p)))
+      .attr('r',3.5)
+      .attr('fill',color)
+      .append('title')
+      .text(p=>`${p.battleDate}  T${p.tier}  ${p.runType}\n${yLabel}: ${fmtRaw(accessor(p))}`);
 }
 
 async function renderLabSpeedView(){

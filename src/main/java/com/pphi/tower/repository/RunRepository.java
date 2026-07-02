@@ -210,6 +210,53 @@ public class RunRepository {
                 .toList();
     }
 
+    public record RunPayloadRow(
+            String id, String battleDate, long battleEpochSeconds, int tier, String runType, String payload) {}
+
+    public List<RunPayloadRow> findByDateWindowWithFilters(LocalDate from, LocalDate to,
+                                                             List<Integer> tiers, List<String> runTypes) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT id, battle_date, battle_epoch_seconds, tier, run_type, payload
+                FROM runs
+                WHERE battle_date >= ? AND battle_date <= ?
+                """);
+        List<Object> params = new ArrayList<>(List.of(from.toString(), to.toString()));
+
+        if (tiers != null && !tiers.isEmpty()) {
+            sql.append(" AND tier IN (").append(placeholders(tiers.size())).append(")");
+            params.addAll(tiers);
+        }
+        if (runTypes != null && !runTypes.isEmpty()) {
+            sql.append(" AND run_type IN (").append(placeholders(runTypes.size())).append(")");
+            params.addAll(runTypes);
+        }
+        sql.append(" ORDER BY battle_date ASC, battle_epoch_seconds ASC");
+
+        return jdbc.query(sql.toString(),
+                (rs, rowNum) -> new RunPayloadRow(
+                        rs.getString("id"),
+                        rs.getString("battle_date"),
+                        rs.getLong("battle_epoch_seconds"),
+                        rs.getInt("tier"),
+                        rs.getString("run_type"),
+                        rs.getString("payload")),
+                params.toArray());
+    }
+
+    public List<Integer> findDistinctTiers() {
+        return jdbc.query("SELECT DISTINCT tier FROM runs ORDER BY tier ASC",
+                (rs, rowNum) -> rs.getInt("tier"));
+    }
+
+    public List<String> findDistinctRunTypes() {
+        return jdbc.query("SELECT DISTINCT run_type FROM runs WHERE run_type IS NOT NULL ORDER BY run_type ASC",
+                (rs, rowNum) -> rs.getString("run_type"));
+    }
+
+    private static String placeholders(int count) {
+        return String.join(",", java.util.Collections.nCopies(count, "?"));
+    }
+
     public List<ReportSummaryDto> findByRunType(String runType) {
         return jdbc.query(
                 "SELECT * FROM runs WHERE run_type = ? ORDER BY run_number DESC", SUMMARY_MAPPER, runType);

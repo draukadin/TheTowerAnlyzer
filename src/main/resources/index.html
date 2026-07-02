@@ -50,6 +50,7 @@
       <div class="nav-dropdown">
         <button class="nav-btn" onclick="showView('reports')">Reports</button>
         <button class="nav-btn" onclick="showView('versions')">Version Tracker</button>
+        <button class="nav-btn" onclick="showView('incometrend')">Income Trends</button>
       </div>
     </div>
     <!-- Collectibles -->
@@ -105,6 +106,7 @@
     </div>
   </main>
 </div>
+<script src="/static/vendor/d3.v7.min.js"></script>
 <script src="/static/app.js"></script>
 
 <div id="addVersionModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddVersionModal()">
