@@ -1131,6 +1131,22 @@ public class DatabaseInitializer {
         } catch (Exception ignored) {
             // Column already exists — safe to continue.
         }
+
+        // ── Content Patches ──────────────────────────────────────────────────
+        // Tracks the last remotely-published lab/workshop content version applied by
+        // ContentPatchService, so a re-published patch at the same version is a no-op.
+
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS content_patch_state (
+                    id              INTEGER PRIMARY KEY CHECK (id = 1),
+                    applied_version INTEGER NOT NULL DEFAULT 0,
+                    applied_at      TEXT
+                )
+                """);
+
+        jdbc.execute("""
+                INSERT OR IGNORE INTO content_patch_state (id, applied_version) VALUES (1, 0)
+                """);
     }
 
     private void backfillContentHashes() {

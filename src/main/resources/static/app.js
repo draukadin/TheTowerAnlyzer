@@ -6099,6 +6099,14 @@ function renderAdminView() {
           <div id="restoreStatus" style="font-size:13px;color:var(--muted);margin-top:0.75rem"></div>
         </div>
       </div>
+      <div id="contentCard" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;margin-top:1rem">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:1rem">Content</div>
+        <div style="display:flex;align-items:center;gap:1rem">
+          <button class="btn btn-primary" id="checkContentBtn" onclick="checkContentUpdates()" style="flex-shrink:0">Check for Updates</button>
+          <span id="contentStatus" style="font-size:13px;color:var(--muted);line-height:1.5;min-width:0;word-break:break-word"></span>
+        </div>
+        <div id="contentVersion" style="font-size:11px;color:var(--muted);margin-top:0.75rem"></div>
+      </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;margin-top:1rem">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:1rem">Setup</div>
         <div style="display:flex;flex-direction:column;gap:0.75rem">
@@ -6166,6 +6174,7 @@ function renderAdminView() {
       </div>
     </div>`;
   loadBackups();
+  loadContentStatus();
 }
 
 function showQrModal() {
@@ -6267,6 +6276,60 @@ function fmtBytes(bytes) {
   let v = bytes / 1024, i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v.toFixed(1)} ${units[i]}`;
+}
+
+// Content patches (centralized mode only). Hidden when /content/status returns 409
+// (legacy Drive mode, no S3 mailbox) — same gating pattern as the restore panel above.
+async function loadContentStatus() {
+  const card = document.getElementById('contentCard');
+  const version = document.getElementById('contentVersion');
+  if (!card || !version) return;
+  try {
+    const res = await fetch(`${API}/content/status`);
+    if (!res.ok) { card.style.display = 'none'; return; }
+    const data = await res.json();
+    card.style.display = '';
+    version.textContent = `Content version: ${data.appliedVersion}`;
+  } catch (e) {
+    card.style.display = 'none';
+  }
+}
+
+async function checkContentUpdates() {
+  const btn = document.getElementById('checkContentBtn');
+  const status = document.getElementById('contentStatus');
+  btn.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Checking…';
+  try {
+    const res = await fetch(`${API}/content/check-updates`, {method: 'POST'});
+    if (!res.ok) {
+      let message = 'Failed to check for content updates.';
+      try {
+        const body = await res.json();
+        if (body && body.message) message = body.message;
+      } catch (parseErr) { /* non-JSON error body, use the generic fallback */ }
+      throw new Error(message);
+    }
+    const data = await res.json();
+    status.style.color = 'var(--green,#4ade80)';
+    if (data.upToDate) {
+      status.textContent = '✓ Already up to date';
+    } else {
+      const parts = [];
+      if (data.labsAdded) parts.push(`${data.labsAdded} lab${data.labsAdded === 1 ? '' : 's'} added`);
+      if (data.labsUpdated) parts.push(`${data.labsUpdated} lab${data.labsUpdated === 1 ? '' : 's'} updated`);
+      if (data.workshopItemsAdded) parts.push(`${data.workshopItemsAdded} workshop item${data.workshopItemsAdded === 1 ? '' : 's'} added`);
+      if (data.workshopItemsUpdated) parts.push(`${data.workshopItemsUpdated} workshop item${data.workshopItemsUpdated === 1 ? '' : 's'} updated`);
+      status.textContent = `✓ Applied v${data.appliedVersion}: ${parts.join(', ') || 'no changes'}`;
+    }
+    document.getElementById('contentVersion').textContent = `Content version: ${data.appliedVersion}`;
+  } catch (e) {
+    status.style.color = 'var(--red)';
+    status.textContent = `✗ ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ── Setup wizard ──────────────────────────────────────────────────────────────
