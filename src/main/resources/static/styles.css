@@ -242,6 +242,8 @@
   .uw-row-locked td{opacity:0.38;}
   .uw-next-row td{padding:1px 10px 5px;font-size:10px;color:var(--muted);font-family:var(--mono);}
   .uw-next-row .uw-next-preview{color:var(--accent);opacity:0.75;}
+  .uw-target-row td{padding:1px 10px 5px;font-size:10px;color:var(--muted);font-family:var(--mono);}
+  .uw-target-row .uw-target-preview{color:var(--orange);opacity:0.75;}
   .uw-row-maxed td{color:#f5c842;}
   .uw-max-label{font-family:var(--mono);font-size:11px;color:#f5c842;font-weight:600;padding:2px 5px;}
   .uw-filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;}
@@ -716,6 +718,8 @@
   .bot-max-label{font-family:var(--mono);font-size:11px;color:#f5c842;font-weight:600;padding:2px 5px;}
   .bot-next-row td{padding:1px 10px 5px;font-size:10px;color:var(--muted);font-family:var(--mono);}
   .bot-next-row .bot-next-preview{color:var(--accent);opacity:0.75;}
+  .bot-target-row td{padding:1px 10px 5px;font-size:10px;color:var(--muted);font-family:var(--mono);}
+  .bot-target-row .bot-target-preview{color:var(--orange);opacity:0.75;}
   .bots-filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;}
   .bots-filter-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
     border:1px solid var(--border2);font-size:11px;cursor:pointer;user-select:none;transition:opacity .15s;}
@@ -778,6 +782,10 @@
   .guardian-level-select{background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:2px 5px;font-family:var(--mono);cursor:pointer;width:56px;}
   .guardian-row-maxed td{color:#f5c842;}
   .guardian-max-label{font-family:var(--mono);font-size:12px;color:#f5c842;font-weight:600;}
+  .guardian-next-row td{padding:1px 10px 5px;font-size:10px;color:var(--muted);font-family:var(--mono);}
+  .guardian-next-row .guardian-next-preview{color:var(--accent);opacity:0.75;}
+  .guardian-target-row td{padding:1px 10px 5px;font-size:10px;color:var(--muted);font-family:var(--mono);}
+  .guardian-target-row .guardian-target-preview{color:var(--orange);opacity:0.75;}
   .guardian-bits-bar{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:1.25rem;}
   .guardian-bits-chip{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;}
   .guardian-bits-chip .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px;}

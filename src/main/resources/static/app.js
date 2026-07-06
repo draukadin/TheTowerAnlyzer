@@ -1446,6 +1446,10 @@ function renderUwStatRow(stat,uwUnlocked,isLocked,isUwPlus=false){
   const nextPreview=(!disabled&&!atMax&&stat.nextValue!=null&&stat.stonesToNext!=null)
     ?`<span class="uw-next-preview">${fmtStatVal(stat.label,stat.currentValue)} → ${fmtStatVal(stat.label,stat.nextValue)}</span> · ${stat.stonesToNext} stones`
     :'';
+  const targetRowClass=`uw-target-row${isUwPlus?' uw-plus-row':''}`;
+  const targetPreview=(!disabled&&stat.targetLevel>stat.currentLevel&&stat.targetValue!=null)
+    ?`<span class="uw-target-preview">Target (Lvl ${stat.targetLevel}): ${fmtStatVal(stat.label,stat.currentValue)} → ${fmtStatVal(stat.label,stat.targetValue)}</span>`
+    :'';
   const lvlCell=mkSpin(stat.currentLevel,0,stat.maxLevel,disabled,`setStatLevelSpin(${stat.statId},__V__)`);
   const tgtCell=atMax
     ?`<span class="uw-max-label">—</span>`
@@ -1459,7 +1463,8 @@ function renderUwStatRow(stat,uwUnlocked,isLocked,isUwPlus=false){
     <td class="uw-stones">${investedDisplay}</td>
     <td class="uw-stones">${toMaxDisplay}</td>
   </tr>
-  ${nextPreview?`<tr class="${nextRowClass}"><td></td><td colspan="6">${nextPreview}</td></tr>`:''}`;
+  ${nextPreview?`<tr class="${nextRowClass}"><td></td><td colspan="6">${nextPreview}</td></tr>`:''}
+  ${targetPreview?`<tr class="${targetRowClass}"><td></td><td colspan="6">${targetPreview}</td></tr>`:''}`;
 }
 
 function saveUwScroll(){sessionStorage.setItem('uw-scroll',document.getElementById('mainContent').scrollTop);}
@@ -4717,13 +4722,18 @@ function botCardHtml(bot) {
       ? `<tr class="bot-next-row${s.isBotPlus?' bot-plus-row':''}"><td></td>
            <td colspan="4"><span class="bot-next-preview">${val} → ${fmtBotVal(nextEntry.value, s.valueUnit)}</span></td></tr>`
       : '';
+    const tgtEntry = tgtLvl !== '' && tgtLvl > curLvl ? lvls.find(e => e.level === tgtLvl) : null;
+    const targetPreview = (!locked && tgtEntry)
+      ? `<tr class="bot-target-row${s.isBotPlus?' bot-plus-row':''}"><td></td>
+           <td colspan="4"><span class="bot-target-preview">Target (Lvl ${tgtLvl}): ${val} → ${fmtBotVal(tgtEntry.value, s.valueUnit)}</span></td></tr>`
+      : '';
     return `<tr class="${rowClass}">
       <td>${label}</td>
       <td class="bot-lvl-cell">${lvlCell}</td>
       <td class="${valClass}">${val}</td>
       <td class="bot-lvl-cell">${tgtCell}</td>
       <td class="bot-cost">${costCell}</td>
-    </tr>${nextPreview}`;
+    </tr>${nextPreview}${targetPreview}`;
   }).join('');
 
   const checkedU  = bot.unlocked ? ' checked' : '';
@@ -5175,6 +5185,7 @@ function guardianChipCardHtml(chip) {
     const atMax    = s.currentLevel >= s.maxLevel;
     const tgtLvl   = s.targetLevel ?? '';
     const curEntry = lvls.find(e => e.level === s.currentLevel);
+    const nextEntry= lvls.find(e => e.level === s.currentLevel + 1);
     const val      = curEntry ? fmtGuardianVal(curEntry.value, s.valueUnit) : '—';
 
     const lvlCell = atMax
@@ -5198,13 +5209,23 @@ function guardianChipCardHtml(chip) {
       costCell = `<span style="color:var(--muted);font-size:11px">—</span>`;
     }
 
+    const nextPreview = (!atMax && nextEntry)
+      ? `<tr class="guardian-next-row"><td></td>
+           <td colspan="4"><span class="guardian-next-preview">${val} → ${fmtGuardianVal(nextEntry.value, s.valueUnit)}</span></td></tr>`
+      : '';
+    const tgtEntry = tgtLvl !== '' && tgtLvl > s.currentLevel ? lvls.find(e => e.level === tgtLvl) : null;
+    const targetPreview = tgtEntry
+      ? `<tr class="guardian-target-row"><td></td>
+           <td colspan="4"><span class="guardian-target-preview">Target (Lvl ${tgtLvl}): ${val} → ${fmtGuardianVal(tgtEntry.value, s.valueUnit)}</span></td></tr>`
+      : '';
+
     return `<tr${atMax?' class="guardian-row-maxed"':''}>
       <td>${escHtml(s.label)}</td>
       <td class="guardian-chip-val">${val}</td>
       <td style="text-align:right">${lvlCell}</td>
       <td style="text-align:right">${tgtCell}</td>
       <td style="text-align:right">${costCell}</td>
-    </tr>`;
+    </tr>${nextPreview}${targetPreview}`;
   }).join('');
 
   return `<div class="guardian-chip-card" data-chip-id="${chip.id}">
