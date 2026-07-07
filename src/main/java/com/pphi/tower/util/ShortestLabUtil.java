@@ -26,6 +26,7 @@ public final class ShortestLabUtil {
             final Map<Long, List<LabRepository.LabLevelCost>> labCostsMap) {
         final Map<Long, List<LabRepository.LabLevelCost>> filteredCosts = new HashMap<>();
         labs.forEach(lab -> {
+            if (lab.locked()) return;
             final long labId = lab.id();
             final int currentLevel = lab.currentLevel();
             final List<LabRepository.LabLevelCost> labCosts = labCostsMap.get(labId);

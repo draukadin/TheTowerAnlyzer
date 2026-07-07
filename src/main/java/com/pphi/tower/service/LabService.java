@@ -45,6 +45,7 @@ public class LabService {
 
         final Map<Long, Integer> result = new HashMap<>();
         for (final LabRepository.LabData lab : labs) {
+            if (lab.locked()) continue;
             final Long remainingSeconds = nextLevelRemainingSeconds(lab, costs, multipliers);
             if (remainingSeconds == null) continue;
 
@@ -73,6 +74,7 @@ public class LabService {
 
         final Map<Long, Double> result = new HashMap<>();
         for (final LabRepository.LabData lab : labs) {
+            if (lab.locked()) continue;
             final Long remainingSeconds = nextLevelRemainingSeconds(lab, costs, multipliers);
             if (remainingSeconds == null) continue;
 

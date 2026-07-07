@@ -43,7 +43,8 @@ public class TierPersonalBestRepository {
                 """, tier);
     }
 
-    @CacheEvict(value = "tier-pb", allEntries = true)
+    // Also evicts "labs": lab tier/wave unlock gates are computed against this column.
+    @CacheEvict(value = {"tier-pb", "labs"}, allEntries = true)
     public void updateWave(int tier, int wave) {
         jdbc.update("UPDATE tier_personal_best SET wave = ? WHERE tier = ?", wave, tier);
     }
@@ -60,7 +61,8 @@ public class TierPersonalBestRepository {
     }
 
     /** Upserts the tier row, raising {@code wave} only if it exceeds the current personal best. */
-    @CacheEvict(value = "tier-pb", allEntries = true)
+    // Also evicts "labs": lab tier/wave unlock gates are computed against this column.
+    @CacheEvict(value = {"tier-pb", "labs"}, allEntries = true)
     public void recordWaveIfGreater(int tier, int wave) {
         jdbc.update("""
                 INSERT INTO tier_personal_best (tier, wave)

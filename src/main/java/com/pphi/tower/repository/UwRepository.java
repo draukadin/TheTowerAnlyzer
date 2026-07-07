@@ -153,7 +153,8 @@ public class UwRepository {
 
     // ── Writes ────────────────────────────────────────────────────────────────
 
-    @CacheEvict(value = "uw-state", allEntries = true)
+    // Also evicts "labs": Ultimate-Weapons-category labs are locked/unlocked based on this flag.
+    @CacheEvict(value = {"uw-state", "labs"}, allEntries = true)
     public void setUnlocked(int uwId, boolean unlocked) {
         jdbc.update("""
                 INSERT INTO uw_player_state (uw_id, unlocked, uw_plus_unlocked)

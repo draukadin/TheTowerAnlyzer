@@ -22,7 +22,7 @@ public final class ContentDefinitions {
 
     private ContentDefinitions() {}
 
-    public record LabDefinition(String name, String category, int maxLevel) {}
+    public record LabDefinition(String name, String category, int maxLevel, String unlock, String uw) {}
 
     public record WorkshopUnlockGroupDefinition(String key, int categoryId, long unlockCost) {}
 

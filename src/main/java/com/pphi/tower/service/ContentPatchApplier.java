@@ -70,21 +70,28 @@ public class ContentPatchApplier {
 
     /** @return true if this was a brand-new lab (false if an existing one was updated). */
     private boolean upsertLab(ContentDefinitions.LabDefinition def) {
+        Integer uwId = resolveUwId(def.uw());
         Long existingId = jdbc.query(
                 "SELECT id FROM lab WHERE name = ?",
                 rs -> rs.next() ? rs.getLong("id") : null, def.name());
         if (existingId == null) {
             Long id = jdbc.queryForObject(
-                    "INSERT INTO lab (name, category, max_level) VALUES (?,?,?) RETURNING id",
-                    Long.class, def.name(), def.category(), def.maxLevel());
+                    "INSERT INTO lab (name, category, max_level, unlock, uw_id) VALUES (?,?,?,?,?) RETURNING id",
+                    Long.class, def.name(), def.category(), def.maxLevel(), def.unlock(), uwId);
             jdbc.update(
                     "INSERT INTO lab_player_state (lab_id, current_level, target_level) VALUES (?, 0, NULL)",
                     id);
             return true;
         }
-        jdbc.update("UPDATE lab SET category = ?, max_level = ? WHERE id = ?",
-                def.category(), def.maxLevel(), existingId);
+        jdbc.update("UPDATE lab SET category = ?, max_level = ?, unlock = ?, uw_id = ? WHERE id = ?",
+                def.category(), def.maxLevel(), def.unlock(), uwId, existingId);
         return false;
+    }
+
+    private Integer resolveUwId(String uwCode) {
+        if (uwCode == null) return null;
+        return jdbc.query("SELECT id FROM uw WHERE code = ?",
+                rs -> rs.next() ? rs.getInt("id") : null, uwCode);
     }
 
     private void applyLabCosts(Map<String, Map<String, ContentDefinitions.LabCostEntry>> labCosts) {

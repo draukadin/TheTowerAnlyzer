@@ -16,7 +16,7 @@ class ShortestLabUtilTest {
             new LabRepository.LabMultipliers(1.0, 1.0, 0, 0, 0.0);
 
     private static LabRepository.LabData lab(long id, int currentLevel) {
-        return new LabRepository.LabData(id, "Lab " + id, "OFFENSE", 10, currentLevel, null, "desc", null);
+        return new LabRepository.LabData(id, "Lab " + id, "OFFENSE", 10, currentLevel, null, "desc", null, null, false);
     }
 
     private static LabRepository.LabLevelCost cost(int level, long durationSeconds, double coinCost) {

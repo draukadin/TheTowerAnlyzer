@@ -28,7 +28,7 @@ class LabServiceTest {
     }
 
     private static LabRepository.LabData lab(long id, int currentLevel) {
-        return new LabRepository.LabData(id, "Lab " + id, "OFFENSE", 10, currentLevel, null, "desc", null);
+        return new LabRepository.LabData(id, "Lab " + id, "OFFENSE", 10, currentLevel, null, "desc", null, null, false);
     }
 
     private static LabRepository.LabLevelCost cost(int level, long durationSeconds, double coinCost) {
@@ -85,7 +85,7 @@ class LabServiceTest {
     }
 
     private static LabRepository.LabData labWithTarget(long id, int currentLevel, Integer targetLevel, int maxLevel) {
-        return new LabRepository.LabData(id, "Lab " + id, "OFFENSE", maxLevel, currentLevel, targetLevel, "desc", null);
+        return new LabRepository.LabData(id, "Lab " + id, "OFFENSE", maxLevel, currentLevel, targetLevel, "desc", null, null, false);
     }
 
     private static final List<LabRepository.LabGemMilestone> MILESTONES = List.of(

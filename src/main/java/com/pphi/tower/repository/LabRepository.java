@@ -1,25 +1,33 @@
 package com.pphi.tower.repository;
 
+import com.pphi.tower.util.LabLockUtil;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Repository
 public class LabRepository {
 
     private final JdbcTemplate jdbc;
+    private final TierPersonalBestRepository tierPbRepo;
+    private final UwRepository uwRepo;
 
-    public LabRepository(JdbcTemplate jdbc) {
+    public LabRepository(JdbcTemplate jdbc, TierPersonalBestRepository tierPbRepo, UwRepository uwRepo) {
         this.jdbc = jdbc;
+        this.tierPbRepo = tierPbRepo;
+        this.uwRepo = uwRepo;
     }
 
     public record LabData(long id, String name, String category, int maxLevel,
                           int currentLevel, Integer targetLevel,
-                          String description, String unlock) {}
+                          String description, String unlock, Integer uwId, boolean locked) {}
 
     public record LabLevelCost(int level, Long durationSeconds, Double coinCost) {}
 
@@ -36,11 +44,12 @@ public class LabRepository {
                        COALESCE(ps.current_level, 0) AS current_level,
                        ps.target_level,
                        l.description,
-                       l.unlock
+                       l.unlock,
+                       l.uw_id
                 FROM lab l
                 LEFT JOIN lab_player_state ps ON ps.lab_id = l.id
                 ORDER BY l.id
-                """, LAB_ROW_MAPPER);
+                """, labRowMapper());
     }
 
     public List<LabData> getByCategory(String category) {
@@ -49,12 +58,13 @@ public class LabRepository {
                        COALESCE(ps.current_level, 0) AS current_level,
                        ps.target_level,
                        l.description,
-                       l.unlock
+                       l.unlock,
+                       l.uw_id
                 FROM lab l
                 LEFT JOIN lab_player_state ps ON ps.lab_id = l.id
                 WHERE l.category = ?
                 ORDER BY l.id
-                """, LAB_ROW_MAPPER, category);
+                """, labRowMapper(), category);
     }
 
     public List<LabData> search(String query) {
@@ -64,16 +74,30 @@ public class LabRepository {
                        COALESCE(ps.current_level, 0) AS current_level,
                        ps.target_level,
                        l.description,
-                       l.unlock
+                       l.unlock,
+                       l.uw_id
                 FROM lab l
                 LEFT JOIN lab_player_state ps ON ps.lab_id = l.id
                 WHERE LOWER(l.name) LIKE ? OR LOWER(l.description) LIKE ?
                 ORDER BY l.id
-                """, LAB_ROW_MAPPER, pattern, pattern);
+                """, labRowMapper(), pattern, pattern);
     }
 
-    private static final org.springframework.jdbc.core.RowMapper<LabData> LAB_ROW_MAPPER =
-            (rs, i) -> new LabData(
+    /** Built fresh per query so lock state reflects the current tier PBs / UW unlocks. */
+    private RowMapper<LabData> labRowMapper() {
+        Map<Integer, Integer> bestWaveByTier = new HashMap<>();
+        for (TierPersonalBestRepository.TierPb pb : tierPbRepo.findAll()) {
+            bestWaveByTier.put(pb.tier(), pb.wave());
+        }
+        Map<Integer, Boolean> uwUnlockedByUwId = new HashMap<>();
+        for (UwRepository.UwPlayerData uw : uwRepo.getAllUwState()) {
+            uwUnlockedByUwId.put(uw.uwId(), uw.unlocked());
+        }
+
+        return (rs, i) -> {
+            String unlock = rs.getString("unlock");
+            Integer uwId = rs.getObject("uw_id") != null ? rs.getInt("uw_id") : null;
+            return new LabData(
                     rs.getLong("id"),
                     rs.getString("name"),
                     rs.getString("category"),
@@ -81,8 +105,12 @@ public class LabRepository {
                     rs.getInt("current_level"),
                     rs.getObject("target_level") != null ? rs.getInt("target_level") : null,
                     rs.getString("description"),
-                    rs.getString("unlock")
+                    unlock,
+                    uwId,
+                    LabLockUtil.isLocked(unlock, uwId, bestWaveByTier, uwUnlockedByUwId)
             );
+        };
+    }
 
     @Caching(evict = {
         @CacheEvict(value = "labs", allEntries = true),
