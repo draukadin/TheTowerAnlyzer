@@ -98,11 +98,12 @@ class LabServiceTest {
             new LabRepository.LabGemMilestone(360.0, 25000));
 
     @Test
-    void gemRushCosts_computesCostForLabsWithARemainingTarget() {
-        List<LabRepository.LabData> labs = List.of(labWithTarget(1, 0, 5, 10));
+    void gemRushCosts_computesCostForTheImmediateNextLevelOnly() {
+        // targetLevel(1) is below currentLevel(2) on purpose: a lab can only ever be
+        // rushed one level at a time, so the target must have no bearing on the result.
+        List<LabRepository.LabData> labs = List.of(labWithTarget(1, 2, 1, 10));
         Map<Long, List<LabRepository.LabLevelCost>> costs = Map.of(
-                1L, List.of(cost(1, 86400, 10.0), cost(2, 86400, 10.0), cost(3, 86400, 10.0),
-                        cost(4, 86400, 10.0), cost(5, 86400, 10.0)));
+                1L, List.of(cost(3, 86400, 10.0), cost(4, 500_000, 10.0), cost(5, 500_000, 10.0)));
         LabRepository.LabMultipliers multipliers = new LabRepository.LabMultipliers(1.0, 1.0, 0, 0, 0.0);
 
         when(labRepository.getAll()).thenReturn(labs);
@@ -112,17 +113,18 @@ class LabServiceTest {
 
         Map<Long, Integer> result = service.gemRushCosts();
 
-        int expected = GemRushCalculator.calculateGemCost(MILESTONES, 5 * 86400L, 1.0);
+        int expected = GemRushCalculator.calculateGemCost(MILESTONES, 86400L, 1.0);
         assertThat(result).containsOnly(Map.entry(1L, expected));
     }
 
     @Test
-    void gemRushCosts_skipsMaxedLabsButDefaultsUntargetedLabsToMaxLevel() {
+    void gemRushCosts_skipsMaxedLabsAndLabsMissingNextLevelCostData() {
         List<LabRepository.LabData> labs = List.of(
                 labWithTarget(1, 10, null, 10),
-                labWithTarget(2, 3, null, 4));
+                labWithTarget(2, 3, null, 4),
+                labWithTarget(3, 0, null, 5));
         Map<Long, List<LabRepository.LabLevelCost>> costs = Map.of(
-                2L, List.of(cost(4, 86400, 10.0)));
+                3L, List.of(cost(1, 86400, 10.0)));
         LabRepository.LabMultipliers multipliers = new LabRepository.LabMultipliers(1.0, 1.0, 0, 0, 0.0);
 
         when(labRepository.getAll()).thenReturn(labs);
@@ -133,7 +135,47 @@ class LabServiceTest {
         Map<Long, Integer> result = service.gemRushCosts();
 
         // Lab 1 is maxed out, contributing 1 * 0.015 to the Gem Rush Efficiency multiplier.
+        // Lab 2 has no cost data at all and is skipped.
         int expected = GemRushCalculator.calculateGemCost(MILESTONES, 86400L, 1.015);
-        assertThat(result).containsOnly(Map.entry(2L, expected));
+        assertThat(result).containsOnly(Map.entry(3L, expected));
+    }
+
+    @Test
+    void gemRushWaitTimes_computesHoursForTheImmediateNextLevelOnly() {
+        List<LabRepository.LabData> labs = List.of(labWithTarget(1, 2, 1, 10));
+        Map<Long, List<LabRepository.LabLevelCost>> costs = Map.of(
+                1L, List.of(cost(3, 86400, 10.0), cost(4, 500_000, 10.0), cost(5, 500_000, 10.0)));
+        LabRepository.LabMultipliers multipliers = new LabRepository.LabMultipliers(1.0, 1.0, 0, 0, 0.0);
+
+        when(labRepository.getAll()).thenReturn(labs);
+        when(labRepository.getAllCosts()).thenReturn(costs);
+        when(labRepository.getMultipliers()).thenReturn(multipliers);
+        when(labRepository.getGemMilestones()).thenReturn(MILESTONES);
+
+        Map<Long, Double> result = service.gemRushWaitTimes(423, 2.0);
+
+        double targetDays = GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, 423, 1.0);
+        double expected = GemRushCalculator.calculateRealWorldHoursToWait(1.0, targetDays, 2.0);
+        assertThat(result).containsOnly(Map.entry(1L, expected));
+    }
+
+    @Test
+    void gemRushWaitTimes_returnsEmptyForNonPositiveBudget() {
+        Map<Long, Double> result = service.gemRushWaitTimes(0, 2.0);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void gemRushTargetDays_isIndependentOfAnySpecificLab() {
+        List<LabRepository.LabData> labs = List.of(labWithTarget(1, 10, null, 10));
+
+        when(labRepository.getAll()).thenReturn(labs);
+        when(labRepository.getGemMilestones()).thenReturn(MILESTONES);
+
+        double result = service.gemRushTargetDays(423);
+
+        // Lab 1 is maxed out, contributing 1 * 0.015 to the Gem Rush Efficiency multiplier.
+        double expected = GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, 423, 1.015);
+        assertThat(result).isEqualTo(expected);
     }
 }
