@@ -2421,7 +2421,10 @@ let labGemRushMode = 'wait'; // 'wait' = real-world hours to wait; 'threshold' =
 let labGemBudget = 0;
 let labCategoryFilter = 'All';
 let labHideComplete = false;
+let labHideAtTarget = false;
+let labHideNotAtTarget = false;
 let labSearch = '';
+function labIsAtTarget(lab){ return lab.currentLevel >= (lab.targetLevel ?? lab.currentLevel); }
 let labCellSpeedIdx = 0;
 function labCellSpeedMult(){ return LP_SPEEDS[labCellSpeedIdx].value; }
 async function labSpeedDec(){ if(labCellSpeedIdx>0){labCellSpeedIdx--;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;await refreshGemRushWait();renderLabTables();} }
@@ -2523,6 +2526,8 @@ function buildLabsPage(){
         oninput="labSearch=this.value;renderLabTables()">
       ${filterBtns}
       <button class="labs-filter-btn${labHideComplete?' active':''}" onclick="labHideComplete=!labHideComplete;this.classList.toggle('active');renderLabTables()">Hide Maxed</button>
+      <button class="labs-filter-btn${labHideAtTarget?' active':''}" onclick="labHideAtTarget=!labHideAtTarget;this.classList.toggle('active');renderLabTables()">Hide At Target</button>
+      <button class="labs-filter-btn${labHideNotAtTarget?' active':''}" onclick="labHideNotAtTarget=!labHideNotAtTarget;this.classList.toggle('active');renderLabTables()">Hide Not At Target</button>
     </div>
     <div id="labTablesWrap"></div>`;
 
@@ -2533,6 +2538,8 @@ function renderLabTables(){
   let rows = labData.slice();
   if(labCategoryFilter !== 'All') rows = rows.filter(l => l.category === labCategoryFilter);
   if(labHideComplete) rows = rows.filter(l => l.currentLevel < l.maxLevel);
+  if(labHideAtTarget) rows = rows.filter(l => !labIsAtTarget(l));
+  if(labHideNotAtTarget) rows = rows.filter(l => labIsAtTarget(l));
   if(labSearch){
     const q = labSearch.toLowerCase();
     rows = rows.filter(l => l.name.toLowerCase().includes(q));
