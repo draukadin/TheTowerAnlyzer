@@ -34,6 +34,7 @@ class ReportFetcherServiceTest {
     @Mock private BattleHistoryParser parser;
     @Mock private RunRepository runRepository;
     @Mock private GoogleDriveRepository googleDriveRepository;
+    @Mock private TierPersonalBestService tierPersonalBestService;
 
     private ReportFetcherService service;
     private ObjectMapper mapper;
@@ -44,7 +45,7 @@ class ReportFetcherServiceTest {
         SimpleModule m = new SimpleModule();
         m.addDeserializer(BattleHistory.class, new BattleHistoryDeserializer());
         mapper.registerModule(m);
-        service = new ReportFetcherService(config, parser, runRepository, googleDriveRepository, mapper);
+        service = new ReportFetcherService(config, parser, runRepository, googleDriveRepository, mapper, tierPersonalBestService);
     }
 
     // ── blank folderId guard ─────────────────────────────────────────────────
@@ -87,6 +88,7 @@ class ReportFetcherServiceTest {
 
         int result = service.processReports();
         assertThat(result).isEqualTo(1);
+        verify(tierPersonalBestService).recordResult(8, "farming", null, 3000);
     }
 
     @Test
@@ -143,6 +145,7 @@ class ReportFetcherServiceTest {
         verify(runRepository, never()).insert(any(), any(), any(), any(), any(),
                 anyInt(), anyInt(), anyDouble(), anyLong(), anyLong(),
                 anyDouble(), anyDouble(), any(), any(), any(), anyLong());
+        verifyNoInteractions(tierPersonalBestService);
     }
 
     // ── IOException from stream — logged and file skipped ───────────────────
@@ -163,6 +166,7 @@ class ReportFetcherServiceTest {
         verify(runRepository, never()).insert(any(), any(), any(), any(), any(),
                 anyInt(), anyInt(), anyDouble(), anyLong(), anyLong(),
                 anyDouble(), anyDouble(), any(), any(), any(), anyLong());
+        verifyNoInteractions(tierPersonalBestService);
     }
 
     // ── content-hash duplicate guard ─────────────────────────────────────────
@@ -184,6 +188,7 @@ class ReportFetcherServiceTest {
         verify(runRepository, never()).insert(any(), any(), any(), any(), any(),
                 anyInt(), anyInt(), anyDouble(), anyLong(), anyLong(),
                 anyDouble(), anyDouble(), any(), any(), any(), anyLong());
+        verifyNoInteractions(tierPersonalBestService);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

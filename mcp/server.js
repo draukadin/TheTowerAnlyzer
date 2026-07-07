@@ -109,13 +109,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_lab_state',
-      description: 'Get all lab levels, targets, and effective speed/cost multipliers',
+      description: 'Get all lab levels, targets, and effective speed/cost multipliers. Labs that cannot currently be researched (tier/wave milestone not yet reached, or gated on an Ultimate Weapon that is not yet unlocked) are excluded by default — never recommend one.',
       inputSchema: {
         type: 'object',
         properties: {
           hideMaxed: {
             type: 'boolean',
             description: 'Exclude labs already at max level (default: true)',
+          },
+          hideLocked: {
+            type: 'boolean',
+            description: 'Exclude labs that cannot yet be researched (default: true)',
           },
           category: {
             type: 'string',
@@ -274,7 +278,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_labs',
-      description: 'Get the lab catalog: name, category, description, unlock requirement, max level, and current player level. Use to browse all labs or filter by category. Prefer search_labs when the user names a specific lab.',
+      description: 'Get the lab catalog: name, category, description, unlock requirement, locked state, max level, and current player level. `locked: true` means the lab cannot currently be researched (tier/wave milestone not met, or its Ultimate Weapon is not unlocked) — never recommend a locked lab. Use to browse all labs or filter by category. Prefer search_labs when the user names a specific lab.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -287,7 +291,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'search_labs',
-      description: 'Search labs by name or description using a partial, case-insensitive query. Use this whenever the user names a specific lab and you are not certain of the exact DB name — it handles typos and word-order differences. Returns matching labs with full catalog detail and current player level.',
+      description: 'Search labs by name or description using a partial, case-insensitive query. Use this whenever the user names a specific lab and you are not certain of the exact DB name — it handles typos and word-order differences. Returns matching labs with full catalog detail, current player level, and locked state (`locked: true` means it cannot be researched yet).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -519,9 +523,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ── Lab state ─────────────────────────────────────────────────────────
 
       case 'get_lab_state': {
-        const hideMaxed = args.hideMaxed !== false;
-        const category  = args.category ?? null;
-        return distillLabState(await fetchApi('/api/player-tracker/lab-state'), hideMaxed, category);
+        const hideMaxed  = args.hideMaxed !== false;
+        const hideLocked = args.hideLocked !== false;
+        const category   = args.category ?? null;
+        return distillLabState(await fetchApi('/api/player-tracker/lab-state'), hideMaxed, hideLocked, category);
       }
 
       // ── Workshop state ────────────────────────────────────────────────────
@@ -1212,18 +1217,20 @@ function distillRelics(relicList) {
 
 // ── Distillation: lab state ───────────────────────────────────────────────────
 
-function distillLabState(d, hideMaxed, category) {
+function distillLabState(d, hideMaxed, hideLocked, category) {
   const m = d.multipliers;
   let labs = d.labs ?? [];
 
-  if (hideMaxed) labs = labs.filter(l => l.currentLevel < l.maxLevel);
-  if (category)  labs = labs.filter(l => l.category === category);
+  if (hideMaxed)  labs = labs.filter(l => l.currentLevel < l.maxLevel);
+  if (hideLocked) labs = labs.filter(l => !l.locked);
+  if (category)   labs = labs.filter(l => l.category === category);
 
   const byCategory = {};
   for (const l of labs) {
     if (!byCategory[l.category]) byCategory[l.category] = [];
     const entry = { name: l.name, level: l.currentLevel, max: l.maxLevel };
     if (l.targetLevel != null) entry.target = l.targetLevel;
+    if (l.locked) entry.locked = true;
     byCategory[l.category].push(entry);
   }
 
@@ -1672,6 +1679,7 @@ function distillLabCatalog(labs) {
       max:         l.maxLevel,
       description: l.description ?? null,
       unlock,
+      locked:      l.locked,
     };
     if (l.targetLevel != null) entry.target = l.targetLevel;
     byCategory[l.category].push(entry);

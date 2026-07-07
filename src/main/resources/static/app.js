@@ -2421,11 +2421,13 @@ let labGemRushMode = 'wait'; // 'wait' = real-world hours to wait; 'threshold' =
 let labGemBudget = 0;
 let labCategoryFilter = 'All';
 let labHideComplete = false;
+let labHideLocked = false;
 let labHideAtTarget = false;
 let labHideNotAtTarget = false;
 let labSearch = '';
 function labIsAtTarget(lab){ return lab.currentLevel >= (lab.targetLevel ?? lab.currentLevel); }
 let labCellSpeedIdx = 0;
+let labUwNameById = {};
 function labCellSpeedMult(){ return LP_SPEEDS[labCellSpeedIdx].value; }
 async function labSpeedDec(){ if(labCellSpeedIdx>0){labCellSpeedIdx--;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;await refreshGemRushWait();renderLabTables();} }
 async function labSpeedInc(){ if(labCellSpeedIdx<LP_SPEEDS.length-1){labCellSpeedIdx++;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;await refreshGemRushWait();renderLabTables();} }
@@ -2447,17 +2449,22 @@ async function renderLabsView(){
   document.getElementById('mainContent').innerHTML=
     '<div class="loading-placeholder" style="padding:4rem;text-align:center">Loading labs…</div>';
   try{
-    const [labRes, costsRes, multRes, rushRes] = await Promise.all([
+    const [labRes, costsRes, multRes, rushRes, uwRes] = await Promise.all([
       fetch(`${API}/labs`),
       fetch(`${API}/labs/costs`),
       fetch(`${API}/labs/multipliers`),
       fetch(`${API}/labs/gem-rush-costs`),
+      fetch(`${API}/uw`),
     ]);
     if(!labRes.ok) throw new Error(labRes.statusText);
     labData = await labRes.json();
     labCostCache = await costsRes.json();
     labMultipliers = await multRes.json();
     labGemRushCosts = rushRes.ok ? await rushRes.json() : {};
+    labUwNameById = {};
+    if(uwRes.ok){
+      for(const uw of await uwRes.json()) labUwNameById[uw.uwId] = uw.name;
+    }
     await refreshGemRushWait();
     await refreshGemRushTargetDays();
     buildLabsPage();
@@ -2526,6 +2533,7 @@ function buildLabsPage(){
         oninput="labSearch=this.value;renderLabTables()">
       ${filterBtns}
       <button class="labs-filter-btn${labHideComplete?' active':''}" onclick="labHideComplete=!labHideComplete;this.classList.toggle('active');renderLabTables()">Hide Maxed</button>
+      <button class="labs-filter-btn${labHideLocked?' active':''}" onclick="labHideLocked=!labHideLocked;this.classList.toggle('active');renderLabTables()">Hide Locked</button>
       <button class="labs-filter-btn${labHideAtTarget?' active':''}" onclick="labHideAtTarget=!labHideAtTarget;this.classList.toggle('active');renderLabTables()">Hide At Target</button>
       <button class="labs-filter-btn${labHideNotAtTarget?' active':''}" onclick="labHideNotAtTarget=!labHideNotAtTarget;this.classList.toggle('active');renderLabTables()">Hide Not At Target</button>
     </div>
@@ -2534,10 +2542,22 @@ function buildLabsPage(){
   renderLabTables();
 }
 
+function labLockReason(lab){
+  const reasons = [];
+  const m = lab.unlock && lab.unlock.match(/T(\d+),W(\d+)/);
+  if(m) reasons.push(`Tier ${m[1]} Wave ${m[2]}`);
+  if(lab.uwId != null){
+    const uwName = labUwNameById[lab.uwId];
+    reasons.push(uwName ? `${uwName} unlocked` : 'its Ultimate Weapon unlocked');
+  }
+  return reasons.length ? `Requires ${reasons.join(' and ')}` : 'Locked';
+}
+
 function renderLabTables(){
   let rows = labData.slice();
   if(labCategoryFilter !== 'All') rows = rows.filter(l => l.category === labCategoryFilter);
   if(labHideComplete) rows = rows.filter(l => l.currentLevel < l.maxLevel);
+  if(labHideLocked) rows = rows.filter(l => !l.locked);
   if(labHideAtTarget) rows = rows.filter(l => !labIsAtTarget(l));
   if(labHideNotAtTarget) rows = rows.filter(l => labIsAtTarget(l));
   if(labSearch){
@@ -2571,12 +2591,13 @@ function renderLabTables(){
         </tr></thead>
         <tbody>${labs.map(lab => {
           const isComplete = lab.currentLevel >= lab.maxLevel;
+          const isLocked = !!lab.locked;
           const pct = Math.min(100, Math.round((lab.currentLevel / lab.maxLevel) * 100));
           const fillClass = isComplete ? 'complete' : '';
-          const lvlCell = mkSpin(lab.currentLevel, 0, lab.maxLevel, false, `labSetLevel(${lab.id},__V__)`);
+          const lvlCell = mkSpin(lab.currentLevel, 0, lab.maxLevel, isLocked, `labSetLevel(${lab.id},__V__)`);
           const tgtCell = isComplete
             ? `<span class="lab-max-label">—</span>`
-            : mkSpin(lab.targetLevel ?? lab.currentLevel, lab.currentLevel, lab.maxLevel, false, `labSetTarget(${lab.id},__V__)`);
+            : mkSpin(lab.targetLevel ?? lab.currentLevel, lab.currentLevel, lab.maxLevel, isLocked, `labSetTarget(${lab.id},__V__)`);
           const {cost: costToTgt, dur: durToTgt} = labCostAndTimeToTarget(lab);
           const costHtml = isComplete
             ? `<span class="lab-max-label">—</span>`
@@ -2611,10 +2632,13 @@ function renderLabTables(){
               ? `<span style="color:var(--muted);font-size:11px">—</span>`
               : `<span style="font-family:var(--mono);color:var(--accent)">${fmtDuration(labGemRushTargetDays * 86400)}</span>`;
           }
-          return `<tr class="${isComplete?'lab-row-maxed':''}">
+          const lockBadge = isLocked
+            ? `<span class="lab-lock-badge" title="${escHtml(labLockReason(lab))}">🔒</span>`
+            : '';
+          return `<tr class="${isComplete?'lab-row-maxed':''}${isLocked?' lab-row-locked':''}">
             <td style="font-weight:500;cursor:pointer;color:var(--accent)"
               onclick="showLabCosts(${lab.id})"
-              title="Click to view cost breakdown">${escHtml(lab.name)}</td>
+              title="Click to view cost breakdown">${escHtml(lab.name)}${lockBadge}</td>
             <td>${lvlCell}</td>
             <td>${tgtCell}</td>
             <td>${costHtml}</td>

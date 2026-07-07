@@ -40,7 +40,7 @@ class ContentPatchApplierTest {
 
     @Test
     void apply_newLab_insertsDefinitionAndZeroedPlayerState() {
-        var labDefs = List.of(new ContentDefinitions.LabDefinition("New Lab", "Attack", 10));
+        var labDefs = List.of(new ContentDefinitions.LabDefinition("New Lab", "Attack", 10, null, null));
 
         var summary = applier.apply(1, labDefs, Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());
 
@@ -55,7 +55,7 @@ class ContentPatchApplierTest {
 
     @Test
     void apply_existingLab_updatesDefinitionButPreservesPlayerProgress() {
-        var labDefs = List.of(new ContentDefinitions.LabDefinition("Damage", "Attack", 200));
+        var labDefs = List.of(new ContentDefinitions.LabDefinition("Damage", "Attack", 200, null, null));
 
         var summary = applier.apply(1, labDefs, Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());
 
@@ -71,7 +71,7 @@ class ContentPatchApplierTest {
 
     @Test
     void apply_labLevelCosts_areUpserted() {
-        var labDefs = List.of(new ContentDefinitions.LabDefinition("Damage", "Attack", 100));
+        var labDefs = List.of(new ContentDefinitions.LabDefinition("Damage", "Attack", 100, null, null));
         var costs = Map.of("Damage", Map.of("1", new ContentDefinitions.LabCostEntry(60, 100.0)));
 
         applier.apply(1, labDefs, costs, EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());

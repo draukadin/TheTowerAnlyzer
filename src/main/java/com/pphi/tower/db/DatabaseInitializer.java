@@ -424,15 +424,22 @@ public class DatabaseInitializer {
                 )
                 """);
 
-        // Migrations: add description and unlock columns introduced after initial lab table creation.
+        // Migrations: add description, unlock, and uw_id columns introduced after initial lab table creation.
         for (String col : new String[]{
                 "ADD COLUMN description TEXT",
-                "ADD COLUMN unlock      TEXT"
+                "ADD COLUMN unlock      TEXT",
+                "ADD COLUMN uw_id       INTEGER REFERENCES uw(id)"
         }) {
             try {
                 jdbc.execute("ALTER TABLE lab " + col);
             } catch (Exception ignored) {}
         }
+
+        // Migration: "Common Enemy Health"/"Common Enemy Attack" were renamed to "Basic Enemy
+        // Health"/"Basic Enemy Attack"; installs seeded before the rename ended up with both rows.
+        // No-op once the stale rows are gone.
+        removeStaleDuplicateLab("Common Enemy Health", "Basic Enemy Health");
+        removeStaleDuplicateLab("Common Enemy Attack", "Basic Enemy Attack");
 
         jdbc.execute("""
                 CREATE TABLE IF NOT EXISTS lab_gem_milestone (
@@ -1154,6 +1161,20 @@ public class DatabaseInitializer {
         jdbc.execute("""
                 INSERT OR IGNORE INTO content_patch_state (id, applied_version) VALUES (1, 0)
                 """);
+    }
+
+    private void removeStaleDuplicateLab(String staleName, String currentName) {
+        Integer staleId = jdbc.query("SELECT id FROM lab WHERE name = ?",
+                rs -> rs.next() ? rs.getInt(1) : null, staleName);
+        Integer currentId = jdbc.query("SELECT id FROM lab WHERE name = ?",
+                rs -> rs.next() ? rs.getInt(1) : null, currentName);
+        if (staleId == null || currentId == null) return;
+
+        jdbc.update("DELETE FROM lab_level_cost WHERE lab_id = ?", staleId);
+        jdbc.update("DELETE FROM lab_player_state WHERE lab_id = ?", staleId);
+        jdbc.update("DELETE FROM lab_slot_plan WHERE lab_id = ?", staleId);
+        jdbc.update("DELETE FROM lab WHERE id = ?", staleId);
+        log.info("Removed stale duplicate lab '{}' (kept '{}')", staleName, currentName);
     }
 
     private void backfillContentHashes() {
