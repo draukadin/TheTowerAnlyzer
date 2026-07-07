@@ -187,7 +187,7 @@ public class CurrencySnapshotRepository {
         return tn.amount().multiply(tn.scaleSuffix().getScientificNotation()).doubleValue();
     }
 
-    private static TowerNumber fromRaw(double raw) {
+    public static TowerNumber fromRaw(double raw) {
         BigDecimal value = BigDecimal.valueOf(raw);
         BigDecimal abs = value.abs();
         ScaleSuffix suffix = java.util.Arrays.stream(ScaleSuffix.values())

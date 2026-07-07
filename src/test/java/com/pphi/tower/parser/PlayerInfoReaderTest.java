@@ -28,6 +28,17 @@ class PlayerInfoReaderTest {
         assertTrue(data.containsKey("gems"),  "should contain 'gems'");
         assertTrue(data.containsKey("currentTier"), "should contain 'currentTier'");
 
+        // Lab and Workshop levels are stored as fixed-size per-category arrays (no id/name
+        // attached — array index N is the Nth lab/item seeded for that category, see
+        // PlayerInfoImportService). These must resolve to real int[] data, not the null
+        // placeholder left by an unresolved forward MemberReference.
+        assertLevelArray(data, "enhancementLevel");
+        assertLevelArray(data, "enhancementDefenseLevel");
+        assertLevelArray(data, "enhancementUtilityLevel");
+        assertLevelArray(data, "upgradeWorkshopLevel");
+        assertLevelArray(data, "upgradeWorkshopDefenseLevel");
+        assertLevelArray(data, "upgradeWorkshopUtilityLevel");
+
         // Print all extracted values for visual inspection
         System.out.println("=== Player Data (" + data.size() + " fields) ===");
 
@@ -35,6 +46,12 @@ class PlayerInfoReaderTest {
             Object val = entry.getValue();
             System.out.printf("  %-45s = %s%n", entry.getKey(), formatValue(val));
         }
+    }
+
+    private void assertLevelArray(Map<String, Object> data, String fieldName) {
+        Object val = data.get(fieldName);
+        assertTrue(val instanceof int[], fieldName + " should resolve to an int[], got " + val);
+        assertTrue(((int[]) val).length > 0, fieldName + " should be non-empty");
     }
 
     private String formatValue(Object val) {

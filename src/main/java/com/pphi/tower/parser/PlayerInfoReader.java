@@ -96,7 +96,16 @@ public class PlayerInfoReader {
      * @return unmodifiable map of fieldName → value
      */
     public Map<String, Object> read(Path path) throws IOException {
-        byte[] raw = Files.readAllBytes(path);
+        return read(Files.readAllBytes(path));
+    }
+
+    /**
+     * Parses gzip-compressed playerInfo.dat bytes and returns all player-data fields.
+     *
+     * @param raw gzip-compressed playerInfo.dat contents
+     * @return unmodifiable map of fieldName → value
+     */
+    public Map<String, Object> read(byte[] raw) throws IOException {
         byte[] decompressed;
         try (GZIPInputStream gz = new GZIPInputStream(new ByteArrayInputStream(raw))) {
             decompressed = gz.readAllBytes();
