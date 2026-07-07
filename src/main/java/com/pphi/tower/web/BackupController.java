@@ -6,6 +6,7 @@ import com.pphi.tower.config.DriveProperties;
 import com.pphi.tower.model.s3.S3BackupObject;
 import com.pphi.tower.repository.GoogleDriveRepository;
 import com.pphi.tower.service.S3BackupService;
+import com.pphi.tower.util.AppDirectories;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -85,8 +86,7 @@ public class BackupController {
     }
 
     private ResponseEntity<Map<String, String>> backupToDrive() throws Exception {
-        String appdata = System.getenv("APPDATA");
-        Path source = Path.of(appdata, "TheTowerAnalyzer", "analyzer.db");
+        Path source = AppDirectories.dataDir().resolve("analyzer.db");
 
         String fileName = "analyzer_" + LocalDateTime.now().format(TIMESTAMP) + ".db";
         Path tempCopy = Files.createTempFile("tower-backup-", ".db");

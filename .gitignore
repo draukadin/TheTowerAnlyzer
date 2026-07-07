@@ -7,6 +7,7 @@ target/
 credentials.json
 android/app/build/
 android/.gradle
+android/build/
 android/local.properties
 android/app/*.jks
 

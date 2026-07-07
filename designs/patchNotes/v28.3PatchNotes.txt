@@ -1,0 +1,150 @@
+
+
+Hey Defenders! A new version is headed your way. This update includes three new tiers, a fleet rebalance, and more. We've also made some adjustments to some modules alongside the standard list of bugfixes and minor changes. Furthermore, if you've read this far, do a quick stretch and then some jumping jacks, really, it'll feel nice.
+Fleet Changes
+
+We are rolling out many changes to Fleets with this update. The goal is for them to still pose a meaningful challenge, but also allow users a larger variety of tools to deal with them.
+Overall Changes
+
+    All Fleets are now targetable
+
+    Fleets now path all the way into the Tower's Range before stopping
+
+    Thorns have gone from 10% effective to 15% effective
+
+    Against Fleets, Thorns now take a percent of health remaining rather than a percent of absolute health
+
+    The Support Enemies that spawn alongside Fleets now have their own spawn cap, so they are less likely to not spawn
+
+    All Fleets now have a highly reduced attack rate at Wave 1, which increases linearly up to Wave 4000
+
+    Nuke Mastery and Slow Aura Mastery now impact Fleets
+
+Saboteur
+
+Saboteurs have been changed quite a bit! We want to remove the situation where one bad RNG ruins your run, and we want to give you more time to deal with the threat. Now -- with each attack -- it will decrease a level of the Ultimate Weapon's "main" stat by 1. Once the Saboteur dies, that Ultimate Weapon is fully restored.
+
+These main stats are:
+
+    Damage (DW, SM, PS, ILM, CL)
+
+    Bonus (GT, SL)
+
+    Size (BH)
+
+    Slow % (CF)
+
+Overcharge
+
+Overcharges have had their damage set to the Wave 1 damage of the tier they spawn on. Each successful hit by an Overcharge exponentially boosts its damage by 1.4x. Additionally, OCs have been given a "Parting Shot" ability that gives them the ability to get off one more shot on death (this only fires if they made it into your Tower's Range). OCs now move at 1/5 of the speed of a basic enemy.
+Commanders
+
+Commanders have had their description updated to reflect the fact they were secretly boosting Mass and Speed. Their effect no longer boosts Elites more than it boosts Common Enemies. The area of the pulse has increased, but Commanders now only boost enemy Health, Mass, and Speed by 15% with each pulse. Speed and mass are now capped at 8 boosts per enemy. Commanders now move at 1/5 of the speed of a basic enemy.
+Tier 22 - 24
+
+We are adding Tiers 22 - 24 into the game, adding in new Battle Conditions with Fleets in mind. These conditions were created to give Fleets additional interesting mechanics to engage with.
+
+    Commander’s Ultimate: On Pulse in Tower Range: Commander lowers Attack and Health of the Tower by 1 for the remainder of the run
+
+    Overcharge’s Ultimate: Overcharge's returning Projectile scaling increases by +{LEVEL / 200}
+
+    Saboteur’s Ultimate: Saboteur has a {LEVEL / 2}% chance to attack through the Wall
+
+New Labs
+
+We’ve added some tools to help deal with Fleets, which will be present as milestone unlocks in Tier 22 - 24:
+
+    Overcharge Enemy Health: Decrease Overcharge enemy health at all waves.
+
+    Overcharge Enemy Damage: Decrease Overcharge enemy attack at all waves.
+
+    Commander Enemy Health: Decrease Commander enemy health at all waves.
+
+    Saboteur Enemy Health: Decrease Saboteur enemy health at all waves.
+
+Additionally, we are adding in new levels to Swamp Rend - Additional Enemies. These new levels will be for Scatter, Ray, Saboteur, Commander, and Overcharge. These will be available after completing the current highest level, Vampire.
+Module Adjustments
+
+We're making some improvements to existing modules as well.
+
+    Primordial Collapse: Improved values from 50/55/65/80 to 60/65/75/90
+
+    Magnetic Hook: Added Fleet enemies as a target for Inner Land Mines when entering Tower Range. Both Fleets and Bosses will each have a 100% chance of an ILM firing. (Elites stay at 25%)
+
+    Amplifying Strike: Added "on Fleet Kill" as a trigger for increasing Tower Damage
+
+    Being Annihilator: Added an increase to Super Crit chance as the changing variable [5/7/10/14%], and changed guaranteed shot quantity to 5 at all levels.
+
+Changelog
+
+    Death Wave health is now considered in Wave Skip logic
+
+    Intro Sprint now immediately ends upon the activation of Demon Mode instead of persisting to the end of the current wave
+
+    Removed the Death Defy mission from Events
+
+    Added a note in the "Welcome Back" popup to indicate that the player is resuming a Dissonant Run
+
+    Renamed "Ebola" relic to "Outbreak"
+
+    Implemented some improvements to end of run stats:
+
+        Added a “Health Recovered by Packages” stat
+
+        Added “Enemies Killed in Black Hole”
+
+        Added % next to each Enemy Killed stat to indicate what % of enemies died vs. the actual numeric count
+
+    Expanded UW levels
+
+        Spotlight+
+
+        Smart Missile Damage, Inner Land Mine Damage, Spotlight Bonus, and Poison Swamp Damage
+
+    Increased max level for Assist Module's Multiplier Efficiency from 100% → 130%
+
+    Increased max level for most Workshop Enhancements
+
+    Removed extra Chip section in the Guardians tab
+
+    Added some more information to the Resume Run Panel
+
+    Added an Offline Warning popup (and a toggle to turn it off)
+
+Bugfixes
+
+    Fixed an issue where Black Hole without additional upgrades would deal some damage
+
+    Fixed an issue where Summon Chip has a delay between the activation animation and the spawning of enemies
+
+    Fixed an issue where Battle resumes automatically while the Perk selection pop-up is active
+
+    Fixed an issue where the "Buy New Card x1" button does not grey out when there are insufficient gems available
+
+    Fixed a visual inconsistency where players could click on Ultimate Weapon's descriptions during Dissonant Runs where UWs are disabled
+
+    Fixed an issue where a Boss would spawn on Wave 1 after restarting
+
+    Fixed several small UI issues
+
+    Fixed a visual issue with Enemy Level Skip percentage showing incorrectly as the reduced Heat value on the menu after a run
+
+    Fixed an issue where Workshop upgrades failed to purchase with the exact amount of coins
+
+    Fixed an issues where a short delay would occur after a workshop upgrade
+
+    Fixed an issue where the Attack Chip could negate damage rather than add during high tier battles
+
+    Fixed an issue where battles couldn't be started if the background was set to "random" on the Themes menu
+
+    Fixed an issue where the custom orb distance slider does not readjust properly after removing the Range card
+
+    Fixed an issue where turning off songs muted them instead
+
+    Fixed several localization issues and improved descriptions for some modules, cards, bots, and UWs
+
+    "Hit Same Enemy With SM" progress bar now updates in real-time (rather than only updating when a player unlocks the next level)
+
+    Fix orb range not persisting between app restarts and card unequipping/equipping
+
+    An additional bonus of Rend was always being applied to Poison Swamp Damage. That bonus has moved to being conditional on having the Swamp Rend - Additional Enemies lab level for that particular enemy.

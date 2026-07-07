@@ -1,8 +1,10 @@
 package com.pphi.tower.parser;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +26,7 @@ import java.util.zip.GZIPInputStream;
  *   <li>Int64   → {@code Long}
  *   <li>UInt16  → {@code Integer}
  *   <li>UInt32  → {@code Long}
+ *   <li>UInt64  → {@code BigInteger} (unsigned, in [0, 2^64))
  *   <li>Single  → {@code Float}
  *   <li>Double  → {@code Double}
  *   <li>TimeSpan / DateTime → {@code Long} (100-ns ticks)
@@ -63,18 +66,24 @@ public class PlayerInfoReader {
     private static final int PTE_BOOLEAN  = 1;
     private static final int PTE_BYTE     = 2;
     private static final int PTE_CHAR     = 3;
-    private static final int PTE_DECIMAL  = 4;
-    private static final int PTE_DOUBLE   = 5;
-    private static final int PTE_INT16    = 6;
-    private static final int PTE_INT32    = 7;
-    private static final int PTE_INT64    = 8;
-    private static final int PTE_SBYTE    = 9;
-    private static final int PTE_SINGLE   = 10;
-    private static final int PTE_TIMESPAN = 11;
-    private static final int PTE_DATETIME = 12;
-    private static final int PTE_UINT16   = 13;
-    private static final int PTE_UINT32   = 14;
-    private static final int PTE_UINT64   = 15;
+    private static final int PTE_DECIMAL  = 5;
+    private static final int PTE_DOUBLE   = 6;
+    private static final int PTE_INT16    = 7;
+    private static final int PTE_INT32    = 8;
+    private static final int PTE_INT64    = 9;
+    private static final int PTE_SBYTE    = 10;
+    private static final int PTE_SINGLE   = 11;
+    private static final int PTE_TIMESPAN = 12;
+    private static final int PTE_DATETIME = 13;
+    private static final int PTE_UINT16   = 14;
+    private static final int PTE_UINT32   = 15;
+    private static final int PTE_UINT64   = 16;
+
+    private final DiagnosticLogger logger;
+
+    public PlayerInfoReader(@Value("${tower.parser.diagnostics-enabled:false}") boolean enabled) {
+        logger = new DiagnosticLogger(enabled);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -87,7 +96,16 @@ public class PlayerInfoReader {
      * @return unmodifiable map of fieldName → value
      */
     public Map<String, Object> read(Path path) throws IOException {
-        byte[] raw = Files.readAllBytes(path);
+        return read(Files.readAllBytes(path));
+    }
+
+    /**
+     * Parses gzip-compressed playerInfo.dat bytes and returns all player-data fields.
+     *
+     * @param raw gzip-compressed playerInfo.dat contents
+     * @return unmodifiable map of fieldName → value
+     */
+    public Map<String, Object> read(byte[] raw) throws IOException {
         byte[] decompressed;
         try (GZIPInputStream gz = new GZIPInputStream(new ByteArrayInputStream(raw))) {
             decompressed = gz.readAllBytes();
@@ -101,6 +119,13 @@ public class PlayerInfoReader {
         Map<Integer, ClassInfo> classDefs  = new HashMap<>();
         Map<Integer, Object>    objectStore = new HashMap<>();
         Map<String, Object>     result     = new LinkedHashMap<>();
+        // Root members that were serialized as MemberReferences (memberName → objectId).
+        // .NET BinaryFormatter writes referenced objects (e.g. per-tier arrays) as their
+        // own top-level records that may appear *after* the root object that points at
+        // them, so these ids cannot be resolved at read time. They are resolved in a
+        // second pass below, once the whole stream has been walked and objectStore is
+        // fully populated.
+        Map<String, Integer>    pendingRefs = new LinkedHashMap<>();
 
         s.skip(17); // SerializationHeaderRecord (type + 4×Int32)
 
@@ -114,7 +139,7 @@ public class PlayerInfoReader {
                     ClassInfo cls = readClassDef(s);
                     classDefs.put(cls.objectId(), cls);
                     if (!rootRead) {
-                        readRootValues(s, cls, classDefs, objectStore, result);
+                        readRootValues(s, cls, classDefs, objectStore, result, pendingRefs);
                         rootRead = true;
                     } else {
                         skipClassValues(s, cls, classDefs, objectStore);
@@ -162,6 +187,16 @@ public class PlayerInfoReader {
                 }
             }
         }
+
+        // ── Second pass: resolve forward MemberReferences ─────────────────────
+        // objectStore is now fully populated. Any root member that pointed at an
+        // object serialized later in the stream resolves here; ids that are still
+        // absent (genuinely null/uninitialised, or held in a record type we don't
+        // capture by id) are left as the null placeholder already in result.
+        for (Map.Entry<String, Integer> e : pendingRefs.entrySet()) {
+            Object resolved = objectStore.get(e.getValue());
+            if (resolved != null) result.put(e.getKey(), resolved);
+        }
         return Collections.unmodifiableMap(result);
     }
 
@@ -174,16 +209,23 @@ public class PlayerInfoReader {
         if (memberCount < 0 || memberCount > 100_000)
             throw new IOException("Invalid memberCount " + memberCount
                     + " at pos 0x" + Integer.toHexString(s.pos() - 4));
-        System.out.printf("readClassDef: id=%d class=%s memberCount=%d pos=0x%X%n",
+        logger.printDiagnostic("readClassDef: id=%d class=%s memberCount=%d pos=0x%X%n",
                 objectId, className, memberCount, s.pos());
         String[] names = readMemberNames(s, memberCount);
-        System.out.printf("  after names pos=0x%X%n", s.pos());
+        logger.printDiagnostic("  after names pos=0x%X%n", s.pos());
         int[] bte = readBte(s, memberCount);
-        System.out.printf("  after bte  pos=0x%X%n", s.pos());
+        logger.printDiagnostic("  after bte  pos=0x%X%n", s.pos());
         int[] ai  = readAi(s, bte, memberCount);
-        System.out.printf("  after ai   pos=0x%X%n", s.pos());
+        logger.printDiagnostic("  after ai   pos=0x%X%n", s.pos());
         s.skip(4); // LibraryId
-        System.out.printf("  after libId pos=0x%X (values start here)%n", s.pos());
+        logger.printDiagnostic("  after libId pos=0x%X (values start here)%n", s.pos());
+        {
+            int dumpStart = s.pos();
+            byte[] dump = s.readBytes(32);
+            s.skip(-32);
+            logger.printDiagnostic("  [HEX] first 32 bytes at values start (0x%X): %s%n",
+                    dumpStart, java.util.HexFormat.of().formatHex(dump));
+        }
         return new ClassInfo(objectId, names, bte, ai);
     }
 
@@ -209,19 +251,28 @@ public class PlayerInfoReader {
 
     private int[] readBte(NrbfStream s, int count) throws IOException {
         int[] bte = new int[count];
-        for (int i = 0; i < count; i++) bte[i] = s.readByte();
+        for (int i = 0; i < count; i++) {
+            bte[i] = s.readByte();
+            if (i < 10) {
+                logger.printDiagnostic("    [BTE] member[%d] bte=%d at pos 0x%X%n", i, bte[i], s.pos() - 1);
+            }
+        }
         return bte;
     }
 
     private int[] readAi(NrbfStream s, int[] bte, int count) throws IOException {
         int[] ai = new int[count];
         for (int i = 0; i < count; i++) {
+            int posBefore = s.pos();
             ai[i] = switch (bte[i]) {
                 case BTE_PRIMITIVE, BTE_PRIMITIVE_ARRAY -> s.readByte();  // PrimitiveTypeEnum
-                case BTE_SYSTEM_CLASS -> { s.readLPString(); yield -1; } // class name string
-                case BTE_CLASS        -> { s.readLPString(); s.skip(4); yield -2; } // name + libId
+                case BTE_SYSTEM_CLASS -> { String cn = s.readLPString(); if (i < 10) logger.printDiagnostic("    [AI] member[%d] SYSTEM_CLASS name=%s%n", i, cn); yield -1; } // class name string
+                case BTE_CLASS        -> { String cn = s.readLPString(); s.skip(4); if (i < 10) logger.printDiagnostic("    [AI] member[%d] CLASS name=%s%n", i, cn); yield -2; } // name + libId
                 default               -> -3; // String / Object / Array → no extra bytes
             };
+            if (i < 10) {
+                logger.printDiagnostic("    [AI] member[%d] bte=%d ai=%d posBefore=0x%X posAfter=0x%X%n", i, bte[i], ai[i], posBefore, s.pos());
+            }
         }
         return ai;
     }
@@ -231,35 +282,64 @@ public class PlayerInfoReader {
     private void readRootValues(NrbfStream s, ClassInfo cls,
                                 Map<Integer, ClassInfo> classDefs,
                                 Map<Integer, Object>    objectStore,
-                                Map<String, Object>     result) throws IOException {
+                                Map<String, Object>     result,
+                                Map<String, Integer>    pendingRefs) throws IOException {
         // Print BTE/AI header for first 40 members
-        System.out.println("=== Member type info (non-primitive BTE only) ===");
+        logger.printDiagnostic("=== Member type info (non-primitive BTE only) ===");
         for (int i = 0; i < cls.memberNames().length; i++) {
             if (cls.bte()[i] != BTE_PRIMITIVE) {
-                System.out.printf("  header[%3d] bte=%-2d ai=%-3d  %s%n",
+                logger.printDiagnostic("  header[%3d] bte=%-2d ai=%-3d  %s%n",
                         i, cls.bte()[i], cls.ai()[i], cls.memberNames()[i]);
             }
         }
-        System.out.println("=== Reading values ===");
+        logger.printDiagnostic("=== Reading values ===");
+
+        // Tracks how many *additional* upcoming members are covered by a null-run
+        // record (ObjectNullMultiple / ObjectNullMultiple256) that was already
+        // consumed for an earlier member. NRBF can compress several consecutive
+        // null reference-type members into a single record, so this count must be
+        // shared across member iterations rather than reset per-member.
+        int nullRunRemaining = 0;
 
         for (int i = 0; i < cls.memberNames().length; i++) {
             String name = cls.memberNames()[i];
             int posBeforeRead = s.pos();
             Object val;
             try {
-                if (cls.bte()[i] == BTE_PRIMITIVE) {
+                if (nullRunRemaining > 0) {
+                    nullRunRemaining--;
+                    val = null;
+                } else if (cls.bte()[i] == BTE_PRIMITIVE) {
                     val = readPrimitive(s, cls.ai()[i]);
-                } else if (cls.bte()[i] == BTE_PRIMITIVE_ARRAY) {
-                    val = readPrimArrayMember(s, cls.ai()[i], classDefs, objectStore);
                 } else {
-                    val = readMemberRecord(s, classDefs, objectStore);
+                    int rt = s.readByte();
+                    logger.printDiagnostic("      [RAW] member[%d] (%s) bte=%d ai=%d: rt-byte=0x%02X (dec %d) at pos 0x%X%n",
+                            i, name, cls.bte()[i], cls.ai()[i], rt, rt, posBeforeRead);
+                    if (rt == RT_OBJECT_NULL_MULTIPLE_256) {
+                        int count = s.readByte();          // total members covered, including this one
+                        nullRunRemaining = count - 1;
+                        val = null;
+                    } else if (rt == RT_OBJECT_NULL_MULTIPLE) {
+                        int count = s.readInt32();
+                        nullRunRemaining = count - 1;
+                        val = null;
+                    } else if (rt == RT_MEMBER_REFERENCE) {
+                        // Record the target id and resolve in the second pass — the
+                        // referenced object may be serialized later in the stream.
+                        pendingRefs.put(name, s.readInt32());
+                        val = null;
+                    } else if (cls.bte()[i] == BTE_PRIMITIVE_ARRAY) {
+                        val = readPrimArrayMemberFromTag(s, rt, cls.ai()[i], classDefs, objectStore);
+                    } else {
+                        val = readMemberRecordFromTag(s, rt, classDefs, objectStore);
+                    }
                 }
             } catch (Exception e) {
                 System.err.printf("[WARN] member[%d] (%s) pos=0x%X bte=%d ai=%d: parse error, stopping early: %s%n",
                         i, name, posBeforeRead, cls.bte()[i], cls.ai()[i], e.getMessage());
                 break;  // return partial results rather than crashing
             }
-            System.out.printf("[%3d] pos=0x%X  bte=%d ai=%d  %-45s = %s%n",
+            logger.printDiagnostic("[%3d] pos=0x%X  bte=%d ai=%d  %-45s = %s%n",
                     i, posBeforeRead, cls.bte()[i], cls.ai()[i], name, formatDbg(val));
             result.put(name, val);
         }
@@ -280,13 +360,27 @@ public class PlayerInfoReader {
     private void skipClassValues(NrbfStream s, ClassInfo cls,
                                  Map<Integer, ClassInfo> classDefs,
                                  Map<Integer, Object>    objectStore) throws IOException {
+        int nullRunRemaining = 0;
         for (int i = 0; i < cls.memberNames().length; i++) {
+            if (nullRunRemaining > 0) {
+                nullRunRemaining--;
+                continue;
+            }
             if (cls.bte()[i] == BTE_PRIMITIVE) {
                 readPrimitive(s, cls.ai()[i]);
+                continue;
+            }
+            int rt = s.readByte();
+            if (rt == RT_OBJECT_NULL_MULTIPLE_256) {
+                int count = s.readByte();
+                nullRunRemaining = count - 1;
+            } else if (rt == RT_OBJECT_NULL_MULTIPLE) {
+                int count = s.readInt32();
+                nullRunRemaining = count - 1;
             } else if (cls.bte()[i] == BTE_PRIMITIVE_ARRAY) {
-                readPrimArrayMember(s, cls.ai()[i], classDefs, objectStore);
+                readPrimArrayMemberFromTag(s, rt, cls.ai()[i], classDefs, objectStore);
             } else {
-                readMemberRecord(s, classDefs, objectStore);
+                readMemberRecordFromTag(s, rt, classDefs, objectStore);
             }
         }
     }
@@ -302,10 +396,9 @@ public class PlayerInfoReader {
      *
      * <p>Specifically: a count byte of 0 is the compact null/empty encoding.
      */
-    private Object readPrimArrayMember(NrbfStream s, int elemPte,
+    private Object readPrimArrayMemberFromTag(NrbfStream s, int rt, int elemPte,
                                        Map<Integer, ClassInfo> classDefs,
                                        Map<Integer, Object>    objectStore) throws IOException {
-        int rt = s.readByte();
         return switch (rt) {
             case RT_ARRAY_SINGLE_PRIMITIVE -> {
                 int id  = s.readInt32();
@@ -334,10 +427,9 @@ public class PlayerInfoReader {
      * Reads the next record from the stream as a member value.
      * The caller must NOT have consumed the record-type byte yet.
      */
-    private Object readMemberRecord(NrbfStream s,
+    private Object readMemberRecordFromTag(NrbfStream s, int rt,
                                     Map<Integer, ClassInfo> classDefs,
                                     Map<Integer, Object>    objectStore) throws IOException {
-        int rt = s.readByte();
         return switch (rt) {
             case RT_CLASS_WITH_ID -> {
                 int id     = s.readInt32();
@@ -419,16 +511,18 @@ public class PlayerInfoReader {
             case PTE_DATETIME -> s.readInt64(); // 100-ns ticks (packed with Kind bits)
             case PTE_UINT16   -> s.readUInt16();
             case PTE_UINT32   -> s.readUInt32();
-            // TODO: UInt64 is read as a signed Java long. If the high bit is set (values > Long.MAX_VALUE,
-            //       ~9.2 quintillion) the result will appear as a large negative number, or when cast/displayed
-            //       as an unsigned value will produce a ridiculously large number (e.g. gems). Known affected
-            //       fields should be displayed via Long.toUnsignedString(), or converted to BigInteger via:
-            //         BigInteger.valueOf(rawLong).and(BigInteger.TWO.pow(64).subtract(BigInteger.ONE))
-            //       Consider returning BigInteger here for correctness once all UInt64 fields are identified.
-            case PTE_UINT64   -> s.readInt64();  // returned as signed long; caller casts if needed
+            // UInt64 is read into a signed Java long, then widened to an unsigned BigInteger so
+            // values above Long.MAX_VALUE (~9.2 quintillion, e.g. lifetime gem/stone totals) don't
+            // surface as negative numbers. Always non-negative and in [0, 2^64).
+            case PTE_UINT64   -> toUnsignedBigInteger(s.readInt64());
             case 31 -> { s.skip(4); yield null; } // Unity PTE=31: unknown 4-byte type
             default -> throw new IOException("Unknown PrimitiveTypeEnum: " + pte + " at pos 0x" + Integer.toHexString(s.pos() - 1));
         };
+    }
+
+    /** Reinterprets the 64 raw bits as an unsigned value in [0, 2^64). */
+    private static BigInteger toUnsignedBigInteger(long raw) {
+        return new BigInteger(Long.toUnsignedString(raw));
     }
 
     private Object readPrimArray(NrbfStream s, int pte, int length) throws IOException {
@@ -527,7 +621,7 @@ public class PlayerInfoReader {
                                        Map<Integer, Object>    objectStore) throws IOException {
         s.skip(4); // objectId
         int len = s.readInt32();
-        for (int i = 0; i < len; i++) readMemberRecord(s, classDefs, objectStore);
+        for (int i = 0; i < len; i++) readMemberRecordFromTag(s, s.readByte(), classDefs, objectStore);
     }
 
     /**

@@ -3,6 +3,7 @@ package com.pphi.tower;
 import com.pphi.tower.config.AwsProperties;
 import com.pphi.tower.config.DriveProperties;
 import com.pphi.tower.config.SheetProperties;
+import com.pphi.tower.util.AppDirectories;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -36,6 +37,7 @@ public class TowerAnalyzerApplication {
         boolean seedMode = "seed".equals(System.getProperty("spring.profiles.active"));
         if (!seedMode) {
             installBundledDatabaseIfAbsent();
+            installBundledAdbToolsIfAbsent();
             applyStagedRestoreIfPresent();
             installUserPropertiesIfAbsent();
         }
@@ -49,13 +51,12 @@ public class TowerAnalyzerApplication {
     }
 
     /**
-     * Copies the bundled analyzer.db from the classpath to %APPDATA%\TheTowerAnalyzer
+     * Copies the bundled analyzer.db from the classpath to {@link AppDirectories#dataDir()}
      * before Spring (and HikariCP) start up. This must happen before any datasource
      * bean is initialized, so it cannot live in a Spring component.
      */
     private static void installBundledDatabaseIfAbsent() throws IOException {
-        String appData = System.getenv("APPDATA");
-        Path dir    = Path.of(appData, "TheTowerAnalyzer");
+        Path dir    = AppDirectories.dataDir();
         Path dbFile = dir.resolve("analyzer.db");
         Files.createDirectories(dir);
         if (!Files.exists(dbFile)) {
@@ -72,6 +73,40 @@ public class TowerAnalyzerApplication {
     }
 
     /**
+     * Copies the bundled adb tools for this OS (adb binary, plus Windows' two USB DLLs
+     * where applicable, plus the platform-tools NOTICE.txt) from the classpath to
+     * {@link AppDirectories#dataDir()}{@code \tools\adb}, so the "Import from Device"
+     * feature works without requiring the user to install the Android SDK.
+     */
+    private static void installBundledAdbToolsIfAbsent() throws IOException {
+        Path dir = AppDirectories.dataDir().resolve("tools").resolve("adb");
+        Files.createDirectories(dir);
+        String adbBinaryName = AppDirectories.exeName("adb");
+        Path adbExe = dir.resolve(adbBinaryName);
+        if (!Files.exists(adbExe)) {
+            String platformDir = AppDirectories.isWindows() ? "win" : AppDirectories.isMac() ? "mac" : "linux";
+            String[] files = AppDirectories.isWindows()
+                    ? new String[]{"adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "NOTICE.txt"}
+                    : new String[]{"adb", "NOTICE.txt"};
+            log.info("First run detected — installing bundled adb tools to {}", dir);
+            for (String name : files) {
+                try (InputStream bundled = TowerAnalyzerApplication.class.getResourceAsStream("/tools/adb/" + platformDir + "/" + name)) {
+                    if (bundled != null) {
+                        Path dest = dir.resolve(name);
+                        Files.copy(bundled, dest, StandardCopyOption.REPLACE_EXISTING);
+                        if (!AppDirectories.isWindows() && "adb".equals(name)) {
+                            dest.toFile().setExecutable(true);
+                        }
+                    } else {
+                        log.warn("Bundled adb resource /tools/adb/{}/{} not found on classpath.", platformDir, name);
+                    }
+                }
+            }
+            log.info("Bundled adb tools installed successfully.");
+        }
+    }
+
+    /**
      * Applies a staged database restore (centralized mode, Action item 8) before Spring
      * and HikariCP open the datasource. A restore downloaded from S3 is written to
      * {@code analyzer.db.restore}; on the next startup we move the current db aside and
@@ -80,8 +115,7 @@ public class TowerAnalyzerApplication {
      * process, so it cannot be swapped live and cannot live in a Spring component.
      */
     private static void applyStagedRestoreIfPresent() throws IOException {
-        String appData = System.getenv("APPDATA");
-        Path dir     = Path.of(appData, "TheTowerAnalyzer");
+        Path dir     = AppDirectories.dataDir();
         Path staged  = dir.resolve("analyzer.db.restore");
         if (!Files.exists(staged)) {
             return;
@@ -131,8 +165,7 @@ public class TowerAnalyzerApplication {
     }
 
     private static void installUserPropertiesIfAbsent() throws IOException {
-        String appData = System.getenv("APPDATA");
-        Path dir   = Path.of(appData, "TheTowerAnalyzer");
+        Path dir   = AppDirectories.dataDir();
         Path props = dir.resolve("user.properties");
         Files.createDirectories(dir);
         if (!Files.exists(props)) {
@@ -153,9 +186,13 @@ public class TowerAnalyzerApplication {
         try {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(URI.create(url));
-            } else {
+            } else if (AppDirectories.isWindows()) {
                 // Fallback for headless/non-Desktop environments (e.g. --win-console mode)
                 new ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", url).start();
+            } else if (AppDirectories.isMac()) {
+                new ProcessBuilder("open", url).start();
+            } else {
+                new ProcessBuilder("xdg-open", url).start();
             }
         } catch (Exception e) {
             log.warn("Could not open browser automatically: {}", e.getMessage());
@@ -165,7 +202,7 @@ public class TowerAnalyzerApplication {
     @Bean
     public ApplicationRunner startupConfigLogger(DriveProperties drive, SheetProperties sheet, AwsProperties awsProperties) {
         return args -> {
-            String userPropsPath = System.getenv("APPDATA") + "\\TheTowerAnalyzer\\user.properties";
+            String userPropsPath = AppDirectories.dataDir().resolve("user.properties").toString();
             log.info("Loading user config from: {}", userPropsPath);
             log.info("drive.oauth-credentials-file   = {}", drive.getOauthCredentialsFile());
             log.info("drive.tokens-dir               = {}", drive.getTokensDir());

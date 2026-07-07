@@ -6,6 +6,7 @@ import com.pphi.tower.config.AwsProperties;
 import com.pphi.tower.config.SetupStateService;
 import com.pphi.tower.service.ClaudeSkillsService;
 import com.pphi.tower.service.DdbVersionSyncService;
+import com.pphi.tower.util.AppDirectories;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -44,7 +45,7 @@ public class SetupController {
     }
 
     Path dataDir() {
-        return Path.of(System.getenv("APPDATA"), "TheTowerAnalyzer");
+        return AppDirectories.dataDir();
     }
 
     // The user's Downloads folder (%USERPROFILE%\Downloads), where exported skill
@@ -92,7 +93,7 @@ public class SetupController {
     public ResponseEntity<Map<String, String>> setupMcp() {
         Path mcpDir = getMcpDir();
 
-        Path nodeExe  = mcpDir.resolve("node.exe");
+        Path nodeExe  = mcpDir.resolve(AppDirectories.exeName("node"));
         Path serverJs = mcpDir.resolve("server.js");
 
         if (!Files.exists(nodeExe) || !Files.exists(serverJs)) {
@@ -164,11 +165,12 @@ public class SetupController {
         return Path.of(System.getProperty("java.home")).getParent().resolve("mcp");
     }
 
-    // Resolve the claude CLI path. Checks PATH via where.exe (exit-code gated) then
+    // Resolve the claude CLI path. Checks PATH via where.exe/which (exit-code gated) then
     // known install locations, since the jpackage launcher may not inherit full user PATH.
     private String resolveClaudePath() throws IOException {
         try {
-            Process where = new ProcessBuilder("where.exe", "claude")
+            String lookupCmd = AppDirectories.isWindows() ? "where.exe" : "which";
+            Process where = new ProcessBuilder(lookupCmd, "claude")
                     .redirectErrorStream(true).start();
             String result = new String(where.getInputStream().readAllBytes()).trim();
             int exit = where.waitFor();
@@ -179,15 +181,24 @@ public class SetupController {
             Thread.currentThread().interrupt();
         }
 
-        String appData   = System.getenv("APPDATA");
-        String localData = System.getenv("LOCALAPPDATA");
         List<Path> candidates = new ArrayList<>();
-        if (appData != null) {
-            candidates.add(Path.of(appData, "npm", "claude.cmd"));
-            candidates.add(Path.of(appData, "npm", "claude"));
-        }
-        if (localData != null) {
-            candidates.add(Path.of(localData, "Programs", "claude", "claude.exe"));
+        if (AppDirectories.isWindows()) {
+            String appData   = System.getenv("APPDATA");
+            String localData = System.getenv("LOCALAPPDATA");
+            if (appData != null) {
+                candidates.add(Path.of(appData, "npm", "claude.cmd"));
+                candidates.add(Path.of(appData, "npm", "claude"));
+            }
+            if (localData != null) {
+                candidates.add(Path.of(localData, "Programs", "claude", "claude.exe"));
+            }
+        } else {
+            String home = System.getProperty("user.home");
+            candidates.add(Path.of("/opt/homebrew/bin/claude"));
+            candidates.add(Path.of("/usr/local/bin/claude"));
+            candidates.add(Path.of("/usr/bin/claude"));
+            candidates.add(Path.of(home, ".npm-global", "bin", "claude"));
+            candidates.add(Path.of(home, ".local", "bin", "claude"));
         }
         for (Path candidate : candidates) {
             if (Files.exists(candidate)) return candidate.toString();
@@ -195,9 +206,17 @@ public class SetupController {
         return null;
     }
 
-    // Locate the Claude Desktop App config file. Checks the standard Electron path first,
-    // then MSIX/Windows Store virtualized AppData (AnthropicPBC.Claude_* package family).
+    // Locate the Claude Desktop App config file. On Windows, checks the standard Electron
+    // path first, then MSIX/Windows Store virtualized AppData (AnthropicPBC.Claude_* package
+    // family). On macOS/Linux, checks the platform's standard app-support location.
     private Path resolveDesktopConfigPath() {
+        if (!AppDirectories.isWindows()) {
+            Path standard = AppDirectories.isMac()
+                    ? Path.of(System.getProperty("user.home"), "Library", "Application Support", "Claude")
+                    : Path.of(System.getProperty("user.home"), ".config", "Claude");
+            return Files.exists(standard) ? standard.resolve("claude_desktop_config.json") : null;
+        }
+
         String appData   = System.getenv("APPDATA");
         String localData = System.getenv("LOCALAPPDATA");
 
