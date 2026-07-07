@@ -2414,6 +2414,7 @@ async function saveRotation(){
 
 // ── Labs ─────────────────────────────────────────────────────────────────────
 let labData = [];
+let labGemRushCosts = {};
 let labCategoryFilter = 'All';
 let labHideComplete = false;
 let labSearch = '';
@@ -2428,15 +2429,17 @@ async function renderLabsView(){
   document.getElementById('mainContent').innerHTML=
     '<div class="loading-placeholder" style="padding:4rem;text-align:center">Loading labs…</div>';
   try{
-    const [labRes, costsRes, multRes] = await Promise.all([
+    const [labRes, costsRes, multRes, rushRes] = await Promise.all([
       fetch(`${API}/labs`),
       fetch(`${API}/labs/costs`),
       fetch(`${API}/labs/multipliers`),
+      fetch(`${API}/labs/gem-rush-costs`),
     ]);
     if(!labRes.ok) throw new Error(labRes.statusText);
     labData = await labRes.json();
     labCostCache = await costsRes.json();
     labMultipliers = await multRes.json();
+    labGemRushCosts = rushRes.ok ? await rushRes.json() : {};
     buildLabsPage();
   }catch(e){
     document.getElementById('mainContent').innerHTML=
@@ -2520,6 +2523,7 @@ function renderLabTables(){
           <th>Target</th>
           <th>Cost to Target</th>
           <th>Time to Target</th>
+          <th>Rush Cost</th>
           <th>Max</th>
           <th style="min-width:80px">Progress</th>
         </tr></thead>
@@ -2542,6 +2546,12 @@ function renderLabTables(){
             : durToTgt != null
               ? `<span style="font-family:var(--mono);color:var(--accent)">${fmtDuration(durToTgt / labCellSpeedMult())}</span>`
               : `<span style="color:var(--muted);font-size:11px">—</span>`;
+          const rushCost = labGemRushCosts[lab.id] ?? labGemRushCosts[String(lab.id)];
+          const rushHtml = isComplete
+            ? `<span class="lab-max-label">—</span>`
+            : rushCost != null
+              ? `<span style="font-family:var(--mono);color:var(--accent2)">💎 ${rushCost.toLocaleString()}</span>`
+              : `<span style="color:var(--muted);font-size:11px">—</span>`;
           return `<tr class="${isComplete?'lab-row-maxed':''}">
             <td style="font-weight:500;cursor:pointer;color:var(--accent)"
               onclick="showLabCosts(${lab.id})"
@@ -2550,6 +2560,7 @@ function renderLabTables(){
             <td>${tgtCell}</td>
             <td>${costHtml}</td>
             <td>${timeHtml}</td>
+            <td>${rushHtml}</td>
             <td style="font-family:var(--mono);color:${isComplete?'#f5c842':'var(--muted)'}">${isComplete?'★ ':''}${lab.maxLevel}</td>
             <td>
               <div class="labs-progress" title="${pct}%">
@@ -2558,7 +2569,7 @@ function renderLabTables(){
             </td>
           </tr>
           <tr id="lab-cost-${lab.id}" style="display:none">
-            <td colspan="7" style="padding:8px 16px 12px 24px;background:var(--surface2)">
+            <td colspan="8" style="padding:8px 16px 12px 24px;background:var(--surface2)">
               <span style="color:var(--muted);font-size:12px">Loading…</span>
             </td>
           </tr>`;
@@ -2657,6 +2668,11 @@ function slRenderResults(costMap, allLabs){
   </table>`;
 }
 
+async function refreshGemRushCosts(){
+  const res = await fetch(`${API}/labs/gem-rush-costs`);
+  labGemRushCosts = res.ok ? await res.json() : {};
+}
+
 async function labSetLevel(id, newLevel){
   const lab = labData.find(l => l.id === id);
   if(!lab) return;
@@ -2669,6 +2685,7 @@ async function labSetLevel(id, newLevel){
   await fetch(`${API}/labs/${id}/state`,{method:'PUT',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({currentLevel: newLevel, targetLevel: lab.targetLevel})});
+  await refreshGemRushCosts();
   renderLabTables();
 }
 
@@ -2681,6 +2698,7 @@ async function labSetTarget(id, newTarget){
   await fetch(`${API}/labs/${id}/state`,{method:'PUT',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({currentLevel: lab.currentLevel, targetLevel})});
+  await refreshGemRushCosts();
   renderLabTables();
 }
 

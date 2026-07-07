@@ -434,6 +434,13 @@ public class DatabaseInitializer {
             } catch (Exception ignored) {}
         }
 
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS lab_gem_milestone (
+                    milestone_days REAL    NOT NULL PRIMARY KEY,
+                    base_gems      INTEGER NOT NULL
+                )
+                """);
+
         // ── Lab Slot Planner ──────────────────────────────────────────────────
 
         jdbc.execute("""

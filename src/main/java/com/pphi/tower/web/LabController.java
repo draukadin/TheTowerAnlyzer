@@ -60,4 +60,9 @@ public class LabController {
             @RequestParam double cellSpeed) {
         return labService.shortestLabsToMax(maxDays, cellSpeed);
     }
+
+    @GetMapping("/gem-rush-costs")
+    public java.util.Map<Long, Integer> getGemRushCosts() {
+        return labService.gemRushCosts();
+    }
 }

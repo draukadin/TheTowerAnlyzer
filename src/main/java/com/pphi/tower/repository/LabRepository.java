@@ -27,6 +27,8 @@ public class LabRepository {
                                   int labsSpeedLevel, int coinDiscountLevel,
                                   double relicLabSpeedBonus) {}
 
+    public record LabGemMilestone(double milestoneDays, int baseGems) {}
+
     @Cacheable("labs")
     public List<LabData> getAll() {
         return jdbc.query("""
@@ -166,6 +168,16 @@ public class LabRepository {
         double speedMult = (1.0 + sl * 0.02) * (1.0 + rb);
         double costMult  = 1.0 - dl * 0.003;
         return new LabMultipliers(speedMult, costMult, sl, dl, rb);
+    }
+
+    @Cacheable("lab-gem-milestones")
+    public List<LabGemMilestone> getGemMilestones() {
+        return jdbc.query("""
+                SELECT milestone_days, base_gems
+                FROM lab_gem_milestone
+                ORDER BY milestone_days
+                """,
+                (rs, i) -> new LabGemMilestone(rs.getDouble("milestone_days"), rs.getInt("base_gems")));
     }
 
 }
