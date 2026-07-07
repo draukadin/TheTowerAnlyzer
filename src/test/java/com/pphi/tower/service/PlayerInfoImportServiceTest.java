@@ -88,11 +88,11 @@ class PlayerInfoImportServiceTest {
 
         when(reader.read(any(byte[].class))).thenReturn(data);
         when(workshopRepo.getAll()).thenReturn(List.of(
-                new WorkshopItem(1, "Damage", "Attack", false, 1, 6000, 99, null,
+                new WorkshopItem(1, "Damage", "ATTACK", false, 1, 6000, 99, null,
                         null, null, false, null, null),
-                new WorkshopItem(2, "Damage +", "Attack", true, 1, 400, 0, null,
+                new WorkshopItem(2, "Damage +", "ATTACK", true, 1, 400, 0, null,
                         null, null, false, null, null),
-                new WorkshopItem(3, "Attack Speed", "Attack", false, 2, 99, 0, null,
+                new WorkshopItem(3, "Attack Speed", "ATTACK", false, 2, 99, 0, null,
                         null, null, false, null, null)
         ));
 

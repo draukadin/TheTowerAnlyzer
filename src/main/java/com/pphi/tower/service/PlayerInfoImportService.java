@@ -53,9 +53,9 @@ public class PlayerInfoImportService {
         int labsUpdated = importLabCategory(data, "enhancementLevel", "Attack")
                 + importLabCategory(data, "enhancementDefenseLevel", "Defense")
                 + importLabCategory(data, "enhancementUtilityLevel", "Utility");
-        int workshopUpdated = importWorkshopCategory(data, "upgradeWorkshopLevel", "Attack")
-                + importWorkshopCategory(data, "upgradeWorkshopDefenseLevel", "Defense")
-                + importWorkshopCategory(data, "upgradeWorkshopUtilityLevel", "Utility");
+        int workshopUpdated = importWorkshopCategory(data, "upgradeWorkshopLevel", "ATTACK")
+                + importWorkshopCategory(data, "upgradeWorkshopDefenseLevel", "DEFENSE")
+                + importWorkshopCategory(data, "upgradeWorkshopUtilityLevel", "UTILITY");
 
         return new ImportSummary(currenciesSaved, labsUpdated, workshopUpdated);
     }

@@ -1,6 +1,7 @@
 package com.pphi.tower.db;
 
 import com.pphi.tower.repository.RunRepository;
+import com.pphi.tower.util.AppDirectories;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -8,7 +9,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -26,9 +26,7 @@ public class DatabaseInitializer {
     }
 
     private void ensureDbDirectory() throws IOException {
-        String appData = System.getenv("APPDATA");
-        Path dir = Path.of(appData, "TheTowerAnalyzer");
-        Files.createDirectories(dir);
+        Files.createDirectories(AppDirectories.dataDir());
     }
 
     private void createSchema() {

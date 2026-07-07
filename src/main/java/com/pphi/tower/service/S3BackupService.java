@@ -3,6 +3,7 @@ package com.pphi.tower.service;
 import com.pphi.tower.config.AwsProperties;
 import com.pphi.tower.model.s3.S3BackupObject;
 import com.pphi.tower.repository.S3BackupRepository;
+import com.pphi.tower.util.AppDirectories;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -99,7 +100,7 @@ public class S3BackupService {
     }
 
     private static Path databaseDir() {
-        return Path.of(System.getenv("APPDATA"), "TheTowerAnalyzer");
+        return AppDirectories.dataDir();
     }
 
     private static Path databaseFile() {

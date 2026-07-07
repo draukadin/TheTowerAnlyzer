@@ -2781,13 +2781,16 @@ async function renderCurrenciesView() {
           <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Save File</label>
           <input id="pinfoFile" type="file" accept=".dat" style="font-size:12px;color:var(--text)">
         </div>
-        <div style="display:flex;align-items:center;gap:1rem">
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
           <button class="btn btn-primary" id="pinfoImportBtn" style="font-size:12px;padding:5px 14px"
             onclick="importPlayerInfo()">Import</button>
+          <button class="btn" id="pinfoDeviceImportBtn" style="font-size:12px;padding:5px 14px"
+            onclick="importPlayerInfoFromDevice()">↓ Import from Connected Device</button>
           <span id="pinfoStatus" style="font-size:13px;color:var(--muted)"></span>
         </div>
         <p style="font-size:11px;color:var(--muted);margin:0">
           Updates currencies, lab levels, and Workshop levels from the game's save file.
+          "Import from Connected Device" pulls it directly from a phone plugged in via USB with debugging enabled.
         </p>
       </div>
     </div>
@@ -2890,6 +2893,32 @@ async function importPlayerInfo() {
     status.style.color = 'var(--red)';
     status.textContent = 'Import failed: ' + e.message;
   } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function importPlayerInfoFromDevice() {
+  const deviceBtn = document.getElementById('pinfoDeviceImportBtn');
+  const btn       = document.getElementById('pinfoImportBtn');
+  const status    = document.getElementById('pinfoStatus');
+
+  deviceBtn.disabled = true;
+  if (btn) btn.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Pulling from device…';
+
+  try {
+    const res = await fetch(`${API}/player-info/import-from-device`, { method: 'POST' });
+    if (!res.ok) throw new Error(await httpErrorMessage(res));
+    const result = await res.json();
+    status.style.color = 'var(--green,#4ade80)';
+    status.textContent = `✓ Labs updated: ${result.labsUpdated}, Workshop updated: ${result.workshopItemsUpdated}`;
+    await renderCurrenciesView();
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Import failed: ' + e.message;
+  } finally {
+    deviceBtn.disabled = false;
     if (btn) btn.disabled = false;
   }
 }
