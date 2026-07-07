@@ -2449,6 +2449,7 @@ function buildLabsPage(){
   const complete = labData.filter(l => l.currentLevel >= l.maxLevel).length;
   const atTarget = labData.filter(l => l.targetLevel != null && l.currentLevel >= l.targetLevel).length;
   const withTarget = labData.filter(l => l.targetLevel != null).length;
+  const gemRushEfficiency = 1.0 + complete * 0.015;
 
   const speedCard = `<div class="labs-summary-stat">
       <div class="lbl">Speed Up</div>
@@ -2465,6 +2466,11 @@ function buildLabsPage(){
       <div class="labs-summary-stat"><div class="lbl">Total Labs</div><div class="val">${total}</div></div>
       <div class="labs-summary-stat"><div class="lbl">Maxed Out</div><div class="val" style="color:var(--green)">${complete}</div></div>
       <div class="labs-summary-stat"><div class="lbl">At Target</div><div class="val" style="color:var(--accent)">${atTarget} / ${withTarget}</div></div>
+      <div class="labs-summary-stat" title="1.0 + (${complete} maxed labs × 0.015)">
+        <div class="lbl">Gem Rush Efficiency</div>
+        <div class="val" style="color:var(--gold)">${gemRushEfficiency.toFixed(3)}x</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px">${complete} maxed</div>
+      </div>
       ${speedCard}
     </div>`;
 
