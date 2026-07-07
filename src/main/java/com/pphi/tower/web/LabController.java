@@ -65,4 +65,16 @@ public class LabController {
     public java.util.Map<Long, Integer> getGemRushCosts() {
         return labService.gemRushCosts();
     }
+
+    @GetMapping("/gem-rush-wait")
+    public java.util.Map<Long, Double> getGemRushWaitTimes(
+            @RequestParam int gemBudget,
+            @RequestParam double cellSpeed) {
+        return labService.gemRushWaitTimes(gemBudget, cellSpeed);
+    }
+
+    @GetMapping("/gem-rush-target-days")
+    public double getGemRushTargetDays(@RequestParam int gemBudget) {
+        return labService.gemRushTargetDays(gemBudget);
+    }
 }

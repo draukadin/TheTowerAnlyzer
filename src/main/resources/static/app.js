@@ -2410,13 +2410,27 @@ async function saveRotation(){
 // ── Labs ─────────────────────────────────────────────────────────────────────
 let labData = [];
 let labGemRushCosts = {};
+let labGemRushWait = {};
+let labGemRushTargetDays = null;
+let labGemRushMode = 'wait'; // 'wait' = real-world hours to wait; 'threshold' = remaining research time at which it becomes affordable
+let labGemBudget = 0;
 let labCategoryFilter = 'All';
 let labHideComplete = false;
 let labSearch = '';
 let labCellSpeedIdx = 0;
 function labCellSpeedMult(){ return LP_SPEEDS[labCellSpeedIdx].value; }
-function labSpeedDec(){ if(labCellSpeedIdx>0){labCellSpeedIdx--;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;renderLabTables();} }
-function labSpeedInc(){ if(labCellSpeedIdx<LP_SPEEDS.length-1){labCellSpeedIdx++;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;renderLabTables();} }
+async function labSpeedDec(){ if(labCellSpeedIdx>0){labCellSpeedIdx--;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;await refreshGemRushWait();renderLabTables();} }
+async function labSpeedInc(){ if(labCellSpeedIdx<LP_SPEEDS.length-1){labCellSpeedIdx++;const el=document.getElementById('lab-speed-val');if(el)el.value=LP_SPEEDS[labCellSpeedIdx].label;await refreshGemRushWait();renderLabTables();} }
+async function labSetGemBudget(v){
+  labGemBudget = Math.max(0, parseInt(v)||0);
+  await refreshGemRushWait();
+  await refreshGemRushTargetDays();
+  renderLabTables();
+}
+function labSetGemRushMode(mode){
+  labGemRushMode = mode;
+  renderLabTables();
+}
 
 const LAB_CATEGORIES = ['Main','Attack','Defense','Utility','Ultimate Weapons','Cards','Perks','Bots','Enemies','Modules','Battle Condition'];
 
@@ -2435,6 +2449,8 @@ async function renderLabsView(){
     labCostCache = await costsRes.json();
     labMultipliers = await multRes.json();
     labGemRushCosts = rushRes.ok ? await rushRes.json() : {};
+    await refreshGemRushWait();
+    await refreshGemRushTargetDays();
     buildLabsPage();
   }catch(e){
     document.getElementById('mainContent').innerHTML=
@@ -2459,6 +2475,22 @@ function buildLabsPage(){
         </div>
       </div>
     </div>`;
+  const gemBudgetCard = `<div class="labs-summary-stat">
+      <div class="lbl">Gem Budget</div>
+      <div class="val" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+        <input type="number" min="0" step="100" class="form-input" style="width:110px;font-family:var(--mono)"
+          value="${labGemBudget || ''}" placeholder="e.g. 5000"
+          onchange="labSetGemBudget(this.value)">
+        <div style="display:flex;gap:2px">
+          <button class="labs-filter-btn${labGemRushMode==='wait'?' active':''}" style="font-size:10px;padding:2px 6px"
+            title="Real-world time to wait until this lab's rush cost drops within budget"
+            onclick="labSetGemRushMode('wait')">Wait Time</button>
+          <button class="labs-filter-btn${labGemRushMode==='threshold'?' active':''}" style="font-size:10px;padding:2px 6px"
+            title="Remaining research time a lab will show once it becomes affordable within budget"
+            onclick="labSetGemRushMode('threshold')">At Threshold</button>
+        </div>
+      </div>
+    </div>`;
   const summaryHtml = `
     <div class="labs-summary-bar">
       <div class="labs-summary-stat"><div class="lbl">Total Labs</div><div class="val">${total}</div></div>
@@ -2470,6 +2502,7 @@ function buildLabsPage(){
         <div style="font-size:9px;color:var(--muted);margin-top:2px">${complete} maxed</div>
       </div>
       ${speedCard}
+      ${gemBudgetCard}
     </div>`;
 
   const filterBtns = ['All',...LAB_CATEGORIES].map(c=>
@@ -2519,6 +2552,7 @@ function renderLabTables(){
           <th>Cost to Target</th>
           <th>Time to Target</th>
           <th>Rush Cost</th>
+          <th>${labGemRushMode==='wait' ? 'Time to Afford' : 'At Threshold'}</th>
           <th>Max</th>
           <th style="min-width:80px">Progress</th>
         </tr></thead>
@@ -2547,6 +2581,23 @@ function renderLabTables(){
             : rushCost != null
               ? `<span style="font-family:var(--mono);color:var(--accent2)">💎 ${rushCost.toLocaleString()}</span>`
               : `<span style="color:var(--muted);font-size:11px">—</span>`;
+          let waitHtml;
+          if(isComplete){
+            waitHtml = `<span class="lab-max-label">—</span>`;
+          }else if(!labGemBudget){
+            waitHtml = `<span style="color:var(--muted);font-size:11px" title="Set a gem budget above">—</span>`;
+          }else if(labGemRushMode === 'wait'){
+            const waitHours = labGemRushWait[lab.id] ?? labGemRushWait[String(lab.id)];
+            waitHtml = waitHours == null
+              ? `<span style="color:var(--muted);font-size:11px">—</span>`
+              : waitHours <= 0
+                ? `<span style="font-family:var(--mono);color:var(--green);font-weight:600">Now</span>`
+                : `<span style="font-family:var(--mono);color:var(--accent)">${fmtDuration(waitHours * 3600)}</span>`;
+          }else{
+            waitHtml = (labGemRushTargetDays == null || labGemRushTargetDays < 0)
+              ? `<span style="color:var(--muted);font-size:11px">—</span>`
+              : `<span style="font-family:var(--mono);color:var(--accent)">${fmtDuration(labGemRushTargetDays * 86400)}</span>`;
+          }
           return `<tr class="${isComplete?'lab-row-maxed':''}">
             <td style="font-weight:500;cursor:pointer;color:var(--accent)"
               onclick="showLabCosts(${lab.id})"
@@ -2556,6 +2607,7 @@ function renderLabTables(){
             <td>${costHtml}</td>
             <td>${timeHtml}</td>
             <td>${rushHtml}</td>
+            <td>${waitHtml}</td>
             <td style="font-family:var(--mono);color:${isComplete?'#f5c842':'var(--muted)'}">${isComplete?'★ ':''}${lab.maxLevel}</td>
             <td>
               <div class="labs-progress" title="${pct}%">
@@ -2564,7 +2616,7 @@ function renderLabTables(){
             </td>
           </tr>
           <tr id="lab-cost-${lab.id}" style="display:none">
-            <td colspan="8" style="padding:8px 16px 12px 24px;background:var(--surface2)">
+            <td colspan="9" style="padding:8px 16px 12px 24px;background:var(--surface2)">
               <span style="color:var(--muted);font-size:12px">Loading…</span>
             </td>
           </tr>`;
@@ -2668,6 +2720,19 @@ async function refreshGemRushCosts(){
   labGemRushCosts = res.ok ? await res.json() : {};
 }
 
+async function refreshGemRushWait(){
+  if(!labGemBudget){ labGemRushWait = {}; return; }
+  const params = new URLSearchParams({gemBudget: labGemBudget, cellSpeed: labCellSpeedMult()});
+  const res = await fetch(`${API}/labs/gem-rush-wait?${params}`);
+  labGemRushWait = res.ok ? await res.json() : {};
+}
+
+async function refreshGemRushTargetDays(){
+  if(!labGemBudget){ labGemRushTargetDays = null; return; }
+  const res = await fetch(`${API}/labs/gem-rush-target-days?gemBudget=${labGemBudget}`);
+  labGemRushTargetDays = res.ok ? await res.json() : null;
+}
+
 async function labSetLevel(id, newLevel){
   const lab = labData.find(l => l.id === id);
   if(!lab) return;
@@ -2681,6 +2746,8 @@ async function labSetLevel(id, newLevel){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({currentLevel: newLevel, targetLevel: lab.targetLevel})});
   await refreshGemRushCosts();
+  await refreshGemRushWait();
+  await refreshGemRushTargetDays();
   renderLabTables();
 }
 
@@ -2694,6 +2761,7 @@ async function labSetTarget(id, newTarget){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({currentLevel: lab.currentLevel, targetLevel})});
   await refreshGemRushCosts();
+  await refreshGemRushWait();
   renderLabTables();
 }
 

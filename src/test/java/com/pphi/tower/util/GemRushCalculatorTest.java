@@ -95,4 +95,52 @@ class GemRushCalculatorTest {
         assertThatThrownBy(() -> GemRushCalculator.calculateGemCost(MILESTONES, 1000L, 0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("reverse lookup interpolates the target days for a gem budget")
+    void reverseLookupInterpolatesTargetDays() {
+        // Reverse of "8d 5h 59m rushes for 668 gems" above.
+        double targetDays = GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, 668, EFFICIENCY);
+        assertThat(targetDays).isCloseTo(8.253184, org.assertj.core.data.Offset.offset(0.0001));
+    }
+
+    @Test
+    @DisplayName("reverse lookup round-trips with the forward gem cost calculation")
+    void reverseLookupRoundTripsWithForwardCalculation() {
+        long remainingSeconds = (long) (5.0 * 86400);
+        int cost = GemRushCalculator.calculateGemCost(MILESTONES, remainingSeconds, EFFICIENCY);
+        assertThat(cost).isEqualTo(423);
+
+        // Rounds slightly above the original 5.0 days because the forward cost was ceil()'d up.
+        double targetDays = GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, cost, EFFICIENCY);
+        assertThat(targetDays).isCloseTo(5.001541, org.assertj.core.data.Offset.offset(0.0001));
+    }
+
+    @Test
+    @DisplayName("reverse lookup caps at 360 days once the budget exceeds the max base gem cost")
+    void reverseLookupCapsAt360Days() {
+        double targetDays = GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, 25_000, 1.0);
+        assertThat(targetDays).isEqualTo(360.0);
+    }
+
+    @Test
+    @DisplayName("reverse lookup rejects a non-positive budget or efficiency")
+    void reverseLookupRejectsInvalidInputs() {
+        assertThat(GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, 0, EFFICIENCY)).isEqualTo(-1.0);
+        assertThat(GemRushCalculator.calculateTargetDaysForBudget(MILESTONES, 100, 0)).isEqualTo(-1.0);
+    }
+
+    @Test
+    @DisplayName("real-world wait converts the days gap by the slot speed multiplier")
+    void realWorldHoursToWaitConvertsByCellSpeed() {
+        double hours = GemRushCalculator.calculateRealWorldHoursToWait(10.0, 5.0, 2.0);
+        assertThat(hours).isEqualTo(60.0);
+    }
+
+    @Test
+    @DisplayName("real-world wait is zero once already affordable")
+    void realWorldHoursToWaitIsZeroWhenAlreadyAffordable() {
+        double hours = GemRushCalculator.calculateRealWorldHoursToWait(5.0, 10.0, 2.0);
+        assertThat(hours).isZero();
+    }
 }
