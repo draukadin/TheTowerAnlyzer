@@ -2432,8 +2432,9 @@ async function labSetGemBudget(v){
   await refreshGemRushTargetDays();
   renderLabTables();
 }
-function labSetGemRushMode(mode){
+function labSetGemRushMode(mode, btn){
   labGemRushMode = mode;
+  document.querySelectorAll('.gem-rush-mode-btn').forEach(b=>b.classList.toggle('active', b===btn));
   renderLabTables();
 }
 
@@ -2487,12 +2488,12 @@ function buildLabsPage(){
           value="${labGemBudget || ''}" placeholder="e.g. 5000"
           onchange="labSetGemBudget(this.value)">
         <div style="display:flex;gap:2px">
-          <button class="labs-filter-btn${labGemRushMode==='wait'?' active':''}" style="font-size:10px;padding:2px 6px"
+          <button class="labs-filter-btn gem-rush-mode-btn${labGemRushMode==='wait'?' active':''}" style="font-size:10px;padding:2px 6px"
             title="Real-world time to wait until this lab's rush cost drops within budget"
-            onclick="labSetGemRushMode('wait')">Wait Time</button>
-          <button class="labs-filter-btn${labGemRushMode==='threshold'?' active':''}" style="font-size:10px;padding:2px 6px"
+            onclick="labSetGemRushMode('wait',this)">Wait Time</button>
+          <button class="labs-filter-btn gem-rush-mode-btn${labGemRushMode==='threshold'?' active':''}" style="font-size:10px;padding:2px 6px"
             title="Remaining research time a lab will show once it becomes affordable within budget"
-            onclick="labSetGemRushMode('threshold')">At Threshold</button>
+            onclick="labSetGemRushMode('threshold',this)">At Threshold</button>
         </div>
       </div>
     </div>`;
@@ -2760,7 +2761,7 @@ async function labSetTarget(id, newTarget){
   const lab = labData.find(l => l.id === id);
   if(!lab) return;
   const targetLevel = newTarget == null || newTarget === '' ? null
-    : Math.min(Math.max(newTarget|0, lab.currentLevel + 1), lab.maxLevel);
+    : Math.min(Math.max(newTarget|0, lab.currentLevel), lab.maxLevel);
   lab.targetLevel = targetLevel;
   await fetch(`${API}/labs/${id}/state`,{method:'PUT',
     headers:{'Content-Type':'application/json'},
