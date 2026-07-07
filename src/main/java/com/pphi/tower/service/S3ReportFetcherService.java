@@ -35,18 +35,21 @@ public class S3ReportFetcherService {
     private final RunRepository runRepository;
     private final S3ReportRepository s3Repository;
     private final ObjectMapper objectMapper;
+    private final TierPersonalBestService tierPersonalBestService;
 
     public S3ReportFetcherService(
             AwsProperties aws,
             BattleHistoryParser parser,
             RunRepository runRepository,
             S3ReportRepository s3Repository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            TierPersonalBestService tierPersonalBestService) {
         this.aws = aws;
         this.parser = parser;
         this.runRepository = runRepository;
         this.s3Repository = s3Repository;
         this.objectMapper = objectMapper;
+        this.tierPersonalBestService = tierPersonalBestService;
     }
 
     public int processReports() {
@@ -103,6 +106,7 @@ public class S3ReportFetcherService {
                         report.towerEra(),
                         payload,
                         epochSeconds);
+                tierPersonalBestService.recordResult(report.tier(), s3File.runType(), s3File.dissonanceType(), report.wave());
                 s3Repository.markProcessed(bucket, key);
                 log.info("Indexed S3 report: {} -> {}", s3File.runType(), key);
             } catch (DuplicateKeyException e) {

@@ -35,18 +35,21 @@ public class ReportFetcherService {
     private final RunRepository runRepository;
     private final GoogleDriveRepository googleDriveRepository;
     private final ObjectMapper objectMapper;
+    private final TierPersonalBestService tierPersonalBestService;
 
     public ReportFetcherService(
             DriveProperties config,
             BattleHistoryParser parser,
             RunRepository runRepository,
             GoogleDriveRepository googleDriveRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            TierPersonalBestService tierPersonalBestService) {
         this.config = config;
         this.parser = parser;
         this.runRepository = runRepository;
         this.googleDriveRepository = googleDriveRepository;
         this.objectMapper = objectMapper;
+        this.tierPersonalBestService = tierPersonalBestService;
     }
 
     public int processReports() {
@@ -112,6 +115,7 @@ public class ReportFetcherService {
                         report.towerEra(),
                         payload,
                         epochSeconds);
+                tierPersonalBestService.recordResult(report.tier(), runType, null, report.wave());
                 log.info("Indexed report: {} -> {}/{}", id, runType, filename);
             } catch (DuplicateKeyException e) {
                 log.warn("Duplicate report rejected by unique constraint: {} (file={}, hash={})", id, filename, contentHash);

@@ -58,4 +58,30 @@ public class TierPersonalBestRepository {
         };
         jdbc.update("UPDATE tier_personal_best SET " + column + " = ? WHERE tier = ?", waves, tier);
     }
+
+    /** Upserts the tier row, raising {@code wave} only if it exceeds the current personal best. */
+    @CacheEvict(value = "tier-pb", allEntries = true)
+    public void recordWaveIfGreater(int tier, int wave) {
+        jdbc.update("""
+                INSERT INTO tier_personal_best (tier, wave)
+                VALUES (?, ?)
+                ON CONFLICT(tier) DO UPDATE SET wave = MAX(wave, excluded.wave)
+                """, tier, wave);
+    }
+
+    /** Upserts the tier row, raising the dissonance column for {@code type} only if it exceeds the current personal best. */
+    @CacheEvict(value = "tier-pb", allEntries = true)
+    public void recordDissonanceWavesIfGreater(int tier, DissonanceType type, int waves) {
+        String column = switch (type) {
+            case ATTACK -> "attack_waves";
+            case DEFENSE -> "defense_waves";
+            case UTILITY -> "utility_waves";
+            case UW -> "uw_waves";
+        };
+        jdbc.update("""
+                INSERT INTO tier_personal_best (tier, %s)
+                VALUES (?, ?)
+                ON CONFLICT(tier) DO UPDATE SET %s = MAX(%s, excluded.%s)
+                """.formatted(column, column, column, column), tier, waves);
+    }
 }
