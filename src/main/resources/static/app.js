@@ -2809,6 +2809,53 @@ async function getLabMultipliers(){
   return labMultipliers;
 }
 
+function buildGemRushTimelineHtml(lab, costs, speedMult){
+  if(lab.currentLevel >= lab.maxLevel) return '';
+  if(!labGemBudget){
+    return `<div class="grt-wrap"><span style="color:var(--muted);font-size:11px">Set a Gem Budget above to see the affordability timeline for this level.</span></div>`;
+  }
+  const nextLevelCost = costs.find(c => c.level === lab.currentLevel + 1);
+  if(!nextLevelCost || nextLevelCost.durationSeconds == null){
+    return `<div class="grt-wrap"><span style="color:var(--muted);font-size:11px">No timeline available — missing cost data for the next level.</span></div>`;
+  }
+
+  const currentDisplayDays = (nextLevelCost.durationSeconds / speedMult) / 86400;
+  const targetDays = labGemRushTargetDays;
+  const waitHours = labGemRushWait[lab.id] ?? labGemRushWait[String(lab.id)];
+  if(targetDays == null || targetDays < 0 || waitHours == null){
+    return `<div class="grt-wrap"><span style="color:var(--muted);font-size:11px">Unable to compute affordability timeline.</span></div>`;
+  }
+
+  const affordableNow = waitHours <= 0;
+  const pct = currentDisplayDays > 0
+    ? Math.min(100, Math.max(0, ((currentDisplayDays - targetDays) / currentDisplayDays) * 100))
+    : 0;
+  const targetLbl = fmtDuration(targetDays * 86400);
+  const waitLbl = affordableNow ? 'Affordable Now' : fmtDuration(waitHours * 3600);
+
+  return `<div class="grt-wrap">
+    <div class="grt-track">
+      <div class="grt-fill" style="width:${pct}%"></div>
+      <div class="grt-point grt-start" title="Current remaining time for this level">
+        <span class="grt-dot"></span>
+        <span class="grt-lbl">${fmtDuration(currentDisplayDays * 86400)}</span>
+      </div>
+      <div class="grt-point" style="left:${pct}%" title="Remaining time at which this level becomes affordable within budget">
+        <span class="grt-dot grt-target${affordableNow?' grt-affordable':''}"></span>
+        <span class="grt-lbl grt-target-lbl">${targetLbl}</span>
+      </div>
+      <div class="grt-point grt-end" title="Fully researched">
+        <span class="grt-dot"></span>
+        <span class="grt-lbl">0d</span>
+      </div>
+    </div>
+    <div class="grt-metrics">
+      <div><span class="grt-metric-lbl">Target Remaining Time</span><span class="grt-metric-val" style="color:var(--orange)">${targetLbl}</span></div>
+      <div><span class="grt-metric-lbl">Real-World Wait</span><span class="grt-metric-val" style="color:${affordableNow?'var(--green)':'var(--accent)'}">${waitLbl}</span></div>
+    </div>
+  </div>`;
+}
+
 async function renderLabCostTable(id, lab, costs){
   const {currentLevel, targetLevel, maxLevel} = lab;
   const el = document.getElementById(`lab-cost-${id}`);
@@ -2856,7 +2903,8 @@ async function renderLabCostTable(id, lab, costs){
           <td style="padding:2px 10px;text-align:right;color:var(--muted)">${fmtCoins(c.coinCost)}</td>
         </tr>`;
       }).join('')}</tbody>
-    </table>`;
+    </table>
+    ${buildGemRushTimelineHtml(lab, costs, speedMult)}`;
 }
 
 async function saveNewRelic(){
