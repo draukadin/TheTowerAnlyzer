@@ -19,7 +19,10 @@ public class CosmeticSeeder {
 
     private void seed() {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM cosmetic_category", Integer.class);
-        if (count != null && count > 0) return;
+        if (count != null && count > 0) {
+            migrateCoinBonusPerItem();
+            return;
+        }
         log.info("Seeding {}...", this.getClass().getSimpleName().replace("Seeder", ""));
         seedCategories();
         seedEvents();
@@ -28,6 +31,7 @@ public class CosmeticSeeder {
         seedGuardians();
         seedMenus();
         seedProfileBanners();
+        migrateCoinBonusPerItem();
         log.info("Finished seeding {}", this.getClass().getSimpleName().replace("Seeder", ""));
     }
 
@@ -39,6 +43,25 @@ public class CosmeticSeeder {
         category("guardian",        "Guardians",         0.006);
         category("menu",            "Menu",              0.006);
         category("profile_banner",  "Profile Banners",   0.006);
+    }
+
+    /**
+     * Idempotent per-category Coin Bonus values (distinct from the generic {@code bonus_per_item}
+     * above) — also reaches already-seeded databases.
+     */
+    private void migrateCoinBonusPerItem() {
+        coinBonusPerItem("song",            0.006);
+        coinBonusPerItem("profile_banner",  0.006);
+        coinBonusPerItem("tower_skin",      0.004);
+        coinBonusPerItem("milestone_skin",  0.004);
+        coinBonusPerItem("menu",            0.006);
+        coinBonusPerItem("background_skin", 0.008);
+        coinBonusPerItem("guardian",        0.006);
+    }
+
+    private void coinBonusPerItem(String categoryId, double coinBonusPerItem) {
+        jdbc.update("UPDATE cosmetic_category SET coin_bonus_per_item = ? WHERE id = ?",
+                coinBonusPerItem, categoryId);
     }
 
     // Each row in the spreadsheet represents one event with a paired tower skin and background skin.

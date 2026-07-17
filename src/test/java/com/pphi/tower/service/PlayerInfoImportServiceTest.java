@@ -52,9 +52,9 @@ class PlayerInfoImportServiceTest {
 
         when(reader.read(any(byte[].class))).thenReturn(data);
         when(labRepo.getByCategory("Attack")).thenReturn(List.of(
-                new LabData(10, "Damage", "Attack", 100, 0, null, "", ""),
-                new LabData(11, "Attack Speed", "Attack", 99, 0, null, "", ""),
-                new LabData(12, "Critical Chance", "Attack", 79, 0, null, "", "")
+                new LabData(10, "Damage", "Attack", 100, 0, null, "", "", null, false),
+                new LabData(11, "Attack Speed", "Attack", 99, 0, null, "", "", null, false),
+                new LabData(12, "Critical Chance", "Attack", 79, 0, null, "", "", null, false)
         ));
 
         PlayerInfoImportService.ImportSummary summary = service.importPlayerInfo(new byte[0]);
@@ -72,7 +72,7 @@ class PlayerInfoImportServiceTest {
 
         when(reader.read(any(byte[].class))).thenReturn(data);
         when(labRepo.getByCategory("Attack")).thenReturn(List.of(
-                new LabData(10, "Damage", "Attack", 100, 5, null, "", "")
+                new LabData(10, "Damage", "Attack", 100, 5, null, "", "", null, false)
         ));
 
         PlayerInfoImportService.ImportSummary summary = service.importPlayerInfo(new byte[0]);

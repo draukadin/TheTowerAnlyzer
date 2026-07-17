@@ -389,6 +389,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'get_coin_bonus',
+      description: 'Get the full Coin Bonus breakdown for a tier: Disable Ads, Starter Pack, Epic Pack, Active Cards, Modules, Difficulty Tier, Themes Bonus, Relics Bonus, Enhancement Bonus, and Dissonant Coin Bonus, plus the combined Total Bonus. Mirrors the in-game "All Coins Bonuses" screen.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tier:          { type: 'integer', description: 'Difficulty tier to compute the bonus for' },
+          presetId:      { type: 'integer', description: 'Card preset id to check for the equipped Coins card (default: 1)' },
+          modulePreset:  { type: 'string', description: 'Module preset to check for the Coins/Kill Bonus substat: "Farming", "Tournament", or "Testing" (default: "Farming"). Checks both Primary and Assist slots of that preset.' },
+        },
+        required: ['tier'],
+      },
+    },
+    {
+      name: 'get_coin_enhancement_payback',
+      description: 'Compute how long it takes to recoup the coin cost of buying N more levels of the Workshop+ "Coin Bonus +" enhancement, given recent average coin income. Answers "if I buy N levels costing Y coins, how long until it pays for itself?"',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          levels:    { type: 'integer', description: 'Number of additional Coin Bonus + levels to buy' },
+          windowDays: { type: 'integer', description: 'Rolling window in days for average coin income (default: 30)' },
+        },
+        required: ['levels'],
+      },
+    },
+    {
       name: 'get_gt_income_projection',
       description: 'Compute projected Golden Tower income for a run using GT+ compounding formula. Returns projected income, perma-GT income, marginal value of +1s GT duration, and a comparison table across key duration milestones (15–53s). Use to advise whether to invest next stone in GT Duration vs GT+ level vs GT Cooldown.',
       inputSchema: {
@@ -465,6 +490,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (args.safetyBuffer != null) params.set('safetyBuffer', args.safetyBuffer);
         const qs = params.toString();
         return distillLabSpeedAffordability(await fetchApi(`/api/analysis/lab-speed${qs ? `?${qs}` : ''}`));
+      }
+
+      // ── Coin bonus ────────────────────────────────────────────────────────
+
+      case 'get_coin_bonus': {
+        const params = new URLSearchParams({ tier: args.tier });
+        if (args.presetId != null) params.set('presetId', args.presetId);
+        if (args.modulePreset != null) params.set('modulePreset', args.modulePreset);
+        return result(await fetchApi(`/api/coin-bonus?${params}`));
+      }
+
+      case 'get_coin_enhancement_payback': {
+        const params = new URLSearchParams({ levels: args.levels });
+        if (args.windowDays != null) params.set('days', args.windowDays);
+        return result(await fetchApi(`/api/coin-bonus/enhancement-payback?${params}`));
       }
 
       // ── Recent runs ───────────────────────────────────────────────────────

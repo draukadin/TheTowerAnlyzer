@@ -132,6 +132,14 @@ public class WorkshopRepository {
                 workshopItemId);
     }
 
+    /** The item's effective value (e.g. a coin multiplier) at a given level, if seeded. 0 if none. */
+    public double getValue(long workshopItemId, int level) {
+        Double value = jdbc.query(
+                "SELECT value FROM workshop_item_level_value WHERE workshop_item_id = ? AND level = ?",
+                rs -> rs.next() ? rs.getDouble("value") : null, workshopItemId, level);
+        return value != null ? value : 0.0;
+    }
+
     /**
      * Set a Workshop item's current level.
      * Also records the implied coin spend into the category's cumulative-spend tracker

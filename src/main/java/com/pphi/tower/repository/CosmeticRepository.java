@@ -19,6 +19,7 @@ public class CosmeticRepository {
             String categoryId,
             String categoryName,
             double bonusPerItem,
+            double coinBonusPerItem,
             String name,
             boolean owned,
             Long eventId,
@@ -31,7 +32,7 @@ public class CosmeticRepository {
 
     public List<CosmeticItem> getAll() {
         return jdbc.query("""
-                SELECT i.id, i.category_id, c.display_name, c.bonus_per_item,
+                SELECT i.id, i.category_id, c.display_name, c.bonus_per_item, c.coin_bonus_per_item,
                        i.name, i.owned,
                        i.event_id, e.name AS event_name, e.reroll_multiplier,
                        i.milestone_number, i.milestone_tier, i.milestone_unlock
@@ -45,6 +46,7 @@ public class CosmeticRepository {
                         rs.getString("category_id"),
                         rs.getString("display_name"),
                         rs.getDouble("bonus_per_item"),
+                        rs.getDouble("coin_bonus_per_item"),
                         rs.getString("name"),
                         rs.getInt("owned") == 1,
                         rs.getObject("event_id")        != null ? rs.getLong("event_id")             : null,

@@ -25,11 +25,26 @@ public final class DissonanceBoostUtility {
             final List<Integer> tiersPersonalBest,
             final int echoLevel,
             final DissonanceType dissonanceType) {
+        return BigDecimal.valueOf(computeRaw(tierPersonalBest, tiersPersonalBest, echoLevel, dissonanceType))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Same computation as {@link #compute}, without rounding to 2 decimal places. Callers that
+     * multiply this value into a larger product (e.g. {@code CoinBonusService}'s Total Bonus)
+     * should use this instead of {@link #compute} — rounding here first and multiplying the rounded
+     * result compounds error into the total, the same way the game keeps full precision internally
+     * and only rounds each factor for display.
+     */
+    public static double computeRaw(
+            final int tierPersonalBest,
+            final List<Integer> tiersPersonalBest,
+            final int echoLevel,
+            final DissonanceType dissonanceType) {
         final double current = waveToBonus(tierPersonalBest);
         final double others = tiersPersonalBest.stream().mapToDouble(DissonanceBoostUtility::waveToBonus).sum() - current;
         final int coefficient = dissonanceType.multiplier() - ONE;
-        return BigDecimal.valueOf(ONE + coefficient * (others * ((echoLevel + ONE) * BASE_ECHO_RATE) + current))
-                .setScale(2, RoundingMode.HALF_UP);
+        return ONE + coefficient * (others * ((echoLevel + ONE) * BASE_ECHO_RATE) + current);
     }
 
     private static double waveToBonus(final int waves) {

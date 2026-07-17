@@ -38,7 +38,9 @@ public class ContentPatchApplier {
             Map<String, Map<String, Double>> workshopCosts,
             Map<String, Map<String, Double>> workshopPlusCosts,
             Map<String, Map<String, Double>> workshopValues,
-            Map<String, Map<String, Double>> enhancementValues) {
+            Map<String, Map<String, Double>> enhancementValues,
+            Map<String, Double> tierCoinMultipliers,
+            Map<String, Map<String, Map<String, Double>>> moduleSubstatValues) {
 
         int labsAdded = 0, labsUpdated = 0;
         for (ContentDefinitions.LabDefinition def : labDefs) {
@@ -60,6 +62,8 @@ public class ContentPatchApplier {
         applyWorkshopItemLevelCost(workshopPlusCosts, 1);
         applyWorkshopItemLevelValue(workshopValues, 0);
         applyWorkshopItemLevelValue(enhancementValues, 1);
+        applyTierCoinMultipliers(tierCoinMultipliers);
+        applyModuleSubstatValues(moduleSubstatValues);
 
         jdbc.update(
                 "UPDATE content_patch_state SET applied_version = ?, applied_at = datetime('now') WHERE id = 1",
@@ -182,5 +186,29 @@ public class ContentPatchApplier {
         return jdbc.query(
                 "SELECT id FROM workshop_item WHERE name = ? AND is_plus = ?",
                 rs -> rs.next() ? rs.getLong("id") : null, name, isPlus);
+    }
+
+    private void applyTierCoinMultipliers(Map<String, Double> data) {
+        for (var entry : data.entrySet()) {
+            jdbc.update(
+                    "INSERT OR REPLACE INTO tier_coin_multiplier (tier, multiplier) VALUES (?,?)",
+                    Integer.parseInt(entry.getKey()), entry.getValue());
+        }
+    }
+
+    private void applyModuleSubstatValues(Map<String, Map<String, Map<String, Double>>> data) {
+        // module_coin_bonus_level_value is keyed by (module_rarity, level) only — the outer JSON key
+        // (e.g. "module_coin_bonus") is just a label for which curve this file holds, not a stored
+        // column, since this table is single-purpose (the Generator "Coins / Kill Bonus" curve).
+        for (var keyEntry : data.entrySet()) {
+            for (var rarityEntry : keyEntry.getValue().entrySet()) {
+                String rarity = rarityEntry.getKey();
+                for (var levelEntry : rarityEntry.getValue().entrySet()) {
+                    jdbc.update(
+                            "INSERT OR REPLACE INTO module_coin_bonus_level_value (module_rarity, level, value) VALUES (?,?,?)",
+                            rarity, Integer.parseInt(levelEntry.getKey()), levelEntry.getValue());
+                }
+            }
+        }
     }
 }

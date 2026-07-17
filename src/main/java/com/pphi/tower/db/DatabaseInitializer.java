@@ -1144,6 +1144,37 @@ public class DatabaseInitializer {
             // Column already exists — safe to continue.
         }
 
+        // ── Coin Bonus Calculator ────────────────────────────────────────────
+
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS tier_coin_multiplier (
+                    tier       INTEGER PRIMARY KEY,
+                    multiplier REAL    NOT NULL
+                )
+                """);
+
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS module_coin_bonus_level_value (
+                    module_rarity TEXT    NOT NULL,
+                    level          INTEGER NOT NULL CHECK (level >= 0),
+                    value          REAL    NOT NULL,
+                    PRIMARY KEY (module_rarity, level)
+                )
+                """);
+
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS iap_purchase (
+                    key          TEXT PRIMARY KEY,
+                    display_name TEXT    NOT NULL,
+                    multiplier   REAL    NOT NULL,
+                    owned        INTEGER NOT NULL DEFAULT 0
+                )
+                """);
+
+        try {
+            jdbc.execute("ALTER TABLE cosmetic_category ADD COLUMN coin_bonus_per_item REAL NOT NULL DEFAULT 0");
+        } catch (Exception ignored) {}
+
         // ── Content Patches ──────────────────────────────────────────────────
         // Tracks the last remotely-published lab/workshop content version applied by
         // ContentPatchService, so a re-published patch at the same version is a no-op.

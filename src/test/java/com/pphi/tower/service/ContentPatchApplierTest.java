@@ -42,7 +42,7 @@ class ContentPatchApplierTest {
     void apply_newLab_insertsDefinitionAndZeroedPlayerState() {
         var labDefs = List.of(new ContentDefinitions.LabDefinition("New Lab", "Attack", 10, null, null));
 
-        var summary = applier.apply(1, labDefs, Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());
+        var summary = applier.apply(1, labDefs, Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         assertThat(summary.labsAdded()).isEqualTo(1);
         assertThat(summary.labsUpdated()).isZero();
@@ -57,7 +57,7 @@ class ContentPatchApplierTest {
     void apply_existingLab_updatesDefinitionButPreservesPlayerProgress() {
         var labDefs = List.of(new ContentDefinitions.LabDefinition("Damage", "Attack", 200, null, null));
 
-        var summary = applier.apply(1, labDefs, Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());
+        var summary = applier.apply(1, labDefs, Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         assertThat(summary.labsAdded()).isZero();
         assertThat(summary.labsUpdated()).isEqualTo(1);
@@ -74,7 +74,7 @@ class ContentPatchApplierTest {
         var labDefs = List.of(new ContentDefinitions.LabDefinition("Damage", "Attack", 100, null, null));
         var costs = Map.of("Damage", Map.of("1", new ContentDefinitions.LabCostEntry(60, 100.0)));
 
-        applier.apply(1, labDefs, costs, EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());
+        applier.apply(1, labDefs, costs, EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT duration_seconds, coin_cost FROM lab_level_cost lc JOIN lab l ON l.id = lc.lab_id " +
@@ -90,7 +90,7 @@ class ContentPatchApplierTest {
                 "New Item", 1, 0, 1, 50, "newGroup", null, null));
         var workshopDefs = new ContentDefinitions.WorkshopDefinitions(groups, items);
 
-        var summary = applier.apply(1, List.of(), Map.of(), workshopDefs, Map.of(), Map.of(), Map.of(), Map.of());
+        var summary = applier.apply(1, List.of(), Map.of(), workshopDefs, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         assertThat(summary.workshopItemsAdded()).isEqualTo(1);
         Long itemId = jdbc.queryForObject("SELECT id FROM workshop_item WHERE name='New Item' AND is_plus=0", Long.class);
@@ -106,7 +106,7 @@ class ContentPatchApplierTest {
                 "Health", 2, 0, 1, 9000, null, null, null));
         var workshopDefs = new ContentDefinitions.WorkshopDefinitions(List.of(), items);
 
-        var summary = applier.apply(1, List.of(), Map.of(), workshopDefs, Map.of(), Map.of(), Map.of(), Map.of());
+        var summary = applier.apply(1, List.of(), Map.of(), workshopDefs, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         assertThat(summary.workshopItemsUpdated()).isEqualTo(1);
         Integer maxLevel = jdbc.queryForObject("SELECT max_level FROM workshop_item WHERE name='Health' AND is_plus=0", Integer.class);
@@ -126,7 +126,7 @@ class ContentPatchApplierTest {
         var values = Map.of("Health", Map.of("0", 1.0, "1", 1.05));
         var plusValues = Map.of("Health +", Map.of("0", 2.0));
 
-        applier.apply(1, List.of(), Map.of(), EMPTY_WORKSHOP, costs, plusCosts, values, plusValues);
+        applier.apply(1, List.of(), Map.of(), EMPTY_WORKSHOP, costs, plusCosts, values, plusValues, Map.of(), Map.of());
 
         Double regularCost = jdbc.queryForObject(
                 "SELECT base_cost FROM workshop_item_level_cost wlc JOIN workshop_item wi ON wi.id = wlc.workshop_item_id " +
@@ -153,7 +153,7 @@ class ContentPatchApplierTest {
     void apply_costForUnknownItemName_isSkippedWithoutError() {
         var costs = Map.of("Nonexistent Item", Map.of("1", 10.0));
 
-        var summary = applier.apply(1, List.of(), Map.of(), EMPTY_WORKSHOP, costs, Map.of(), Map.of(), Map.of());
+        var summary = applier.apply(1, List.of(), Map.of(), EMPTY_WORKSHOP, costs, Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         assertThat(summary.workshopItemsAdded()).isZero();
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM workshop_item_level_cost", Integer.class);
@@ -166,7 +166,7 @@ class ContentPatchApplierTest {
                 "Rend Armor Mult +", 1, 1, 2, 400, null, null, 50_000_000_000.0));
         var workshopDefs = new ContentDefinitions.WorkshopDefinitions(List.of(), items);
 
-        applier.apply(1, List.of(), Map.of(), workshopDefs, Map.of(), Map.of(), Map.of(), Map.of());
+        applier.apply(1, List.of(), Map.of(), workshopDefs, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT unlock_group_id, plus_unlock_lab_name, plus_unlock_cumulative_spend FROM workshop_item " +
@@ -177,8 +177,36 @@ class ContentPatchApplierTest {
     }
 
     @Test
+    void apply_tierCoinMultipliers_areUpserted() {
+        applier.apply(1, List.of(), Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of(),
+                Map.of("1", 1.0, "2", 1.1), Map.of());
+
+        Double t1 = jdbc.queryForObject("SELECT multiplier FROM tier_coin_multiplier WHERE tier = 1", Double.class);
+        Double t2 = jdbc.queryForObject("SELECT multiplier FROM tier_coin_multiplier WHERE tier = 2", Double.class);
+        assertThat(t1).isEqualTo(1.0);
+        assertThat(t2).isEqualTo(1.1);
+    }
+
+    @Test
+    void apply_moduleSubstatValues_areUpserted() {
+        var values = Map.of("module_coin_bonus", Map.of("Epic", Map.of("1", 0.019, "2", 0.021)));
+
+        applier.apply(1, List.of(), Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of(),
+                Map.of(), values);
+
+        Double level1 = jdbc.queryForObject(
+                "SELECT value FROM module_coin_bonus_level_value WHERE module_rarity = 'Epic' AND level = 1",
+                Double.class);
+        Double level2 = jdbc.queryForObject(
+                "SELECT value FROM module_coin_bonus_level_value WHERE module_rarity = 'Epic' AND level = 2",
+                Double.class);
+        assertThat(level1).isEqualTo(0.019);
+        assertThat(level2).isEqualTo(0.021);
+    }
+
+    @Test
     void apply_recordsAppliedContentVersion() {
-        applier.apply(7, List.of(), Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of());
+        applier.apply(7, List.of(), Map.of(), EMPTY_WORKSHOP, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 
         Integer version = jdbc.queryForObject("SELECT applied_version FROM content_patch_state WHERE id = 1", Integer.class);
         assertThat(version).isEqualTo(7);

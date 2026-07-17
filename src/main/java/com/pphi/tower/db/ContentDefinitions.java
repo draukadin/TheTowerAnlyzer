@@ -103,4 +103,43 @@ public final class ContentDefinitions {
             throw new RuntimeException("Failed to read numeric content map from " + resource, e);
         }
     }
+
+    /** Parses the flat {@code { "1": 1.0, "2": 1.1, ... } }} shape used by {@code tier_coin_multiplier.json}. */
+    public static Map<String, Double> readFlatNumericMap(Resource resource) {
+        try (InputStream in = resource.getInputStream()) {
+            Map<String, Number> raw = MAPPER.readValue(in, new TypeReference<>() {});
+            Map<String, Double> result = new LinkedHashMap<>();
+            for (var entry : raw.entrySet()) {
+                result.put(entry.getKey(), entry.getValue().doubleValue());
+            }
+            return result;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read flat numeric content map from " + resource, e);
+        }
+    }
+
+    /**
+     * Parses the {@code { "substat_key": { "rarity": { "level": value, ... }, ... }, ... } } shape
+     * used by {@code module_substat_values.json}.
+     */
+    public static Map<String, Map<String, Map<String, Double>>> readModuleSubstatValues(Resource resource) {
+        try (InputStream in = resource.getInputStream()) {
+            Map<String, Map<String, Map<String, Number>>> raw = MAPPER.readValue(in, new TypeReference<>() {});
+            Map<String, Map<String, Map<String, Double>>> result = new LinkedHashMap<>();
+            for (var keyEntry : raw.entrySet()) {
+                Map<String, Map<String, Double>> byRarity = new LinkedHashMap<>();
+                for (var rarityEntry : keyEntry.getValue().entrySet()) {
+                    Map<String, Double> byLevel = new LinkedHashMap<>();
+                    for (var levelEntry : rarityEntry.getValue().entrySet()) {
+                        byLevel.put(levelEntry.getKey(), levelEntry.getValue().doubleValue());
+                    }
+                    byRarity.put(rarityEntry.getKey(), byLevel);
+                }
+                result.put(keyEntry.getKey(), byRarity);
+            }
+            return result;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read module substat values from " + resource, e);
+        }
+    }
 }
