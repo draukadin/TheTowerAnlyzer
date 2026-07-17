@@ -322,6 +322,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'get_uw_stat_levels',
+      description: 'Get the full level-by-level stone cost and stat value progression for all stats of a given Ultimate Weapon. Use to compare cost curves between stats and plan optimal upgrade order — e.g. "when does CF Speed Reduction become more expensive than CF Duration?" or "build a CF stone spend plan". Returns current level, current value, and an upgrades table ([from_level, stones_cost, value_after]) for every future level of each stat.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uwCode: {
+            type: 'string',
+            description: 'UW code (e.g. "CF" for Chrono Field, "GT" for Golden Tower, "SP" for Spotlight, "CL", "SM", "DW", "ILM", "PS", "BH").',
+          },
+        },
+        required: ['uwCode'],
+      },
+    },
+    {
       name: 'get_perks',
       description: 'Get the full perk catalog: id, name, type (Standard/UW/TradeOff), and max picks per run.',
       inputSchema: { type: 'object', properties: {} },
@@ -819,6 +833,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           incomePerMob: round(incomePerMob, 2),
           runsUsed: recentRuns.length,
         });
+      }
+
+      // ── UW stat levels ────────────────────────────────────────────────────
+
+      case 'get_uw_stat_levels': {
+        const uwCode = args.uwCode;
+        if (!uwCode) throw new Error('uwCode is required');
+        const data = await fetchApi(`/api/uw/${encodeURIComponent(uwCode.toUpperCase())}/levels`);
+        return distillUwStatLevels(data);
       }
 
       // ── SL coverage efficiency ────────────────────────────────────────────
@@ -1868,6 +1891,31 @@ function distillSlCoverageEfficiency(d) {
 
   out.recommendation = d.recommendation;
   return result(out);
+}
+
+// ── Distillation: UW stat levels ─────────────────────────────────────────────
+
+function distillUwStatLevels(d) {
+  return result({
+    uw:   d.code,
+    name: d.name,
+    stats: d.stats.map(s => {
+      const lvMap = new Map((s.levels ?? []).map(lv => [lv.level, lv]));
+      const currentEntry = lvMap.get(s.currentLevel);
+      const upgrades = (s.levels ?? [])
+        .filter(lv => lv.level >= s.currentLevel && lv.stonesToNext != null)
+        .map(lv => [lv.level, lv.stonesToNext, lvMap.get(lv.level + 1)?.value ?? null]);
+      return {
+        label:         s.label,
+        key:           s.statKey,
+        current_level: s.currentLevel,
+        current_value: currentEntry?.value ?? null,
+        max_level:     s.maxLevel,
+        // Each entry: [from_level, stones_to_next_level, value_after_upgrade]
+        upgrades,
+      };
+    }),
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
