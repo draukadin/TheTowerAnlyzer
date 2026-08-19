@@ -26,4 +26,17 @@ class TierPersonalBestControllerIT extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tiers").isArray());
     }
+
+    @Test
+    void simulate_returnsBoostForHypotheticalWaves() throws Exception {
+        mvc.perform(get("/api/tier-pb/simulate")
+                        .param("tier", "11")
+                        .param("type", "UTILITY")
+                        .param("waves", "5000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tier").value(11))
+                .andExpect(jsonPath("$.type").value("UTILITY"))
+                .andExpect(jsonPath("$.waves").value(5000))
+                .andExpect(jsonPath("$.boost").value(3.00));
+    }
 }
