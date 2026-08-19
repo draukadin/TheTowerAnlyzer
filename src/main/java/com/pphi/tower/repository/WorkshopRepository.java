@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
 
 @Repository
 public class WorkshopRepository {
@@ -133,7 +134,9 @@ public class WorkshopRepository {
     }
 
     /**
-     * Set a Workshop item's current level.
+     * Set a Workshop item's current level, clamped to {@code [0, max_level]} — callers include
+     * the raw, unvalidated {@code playerInfo.dat} importer, so out-of-range values must be
+     * rejected here rather than trusted from the caller.
      * Also records the implied coin spend into the category's cumulative-spend tracker
      * so Workshop+ unlock progress stays accurate.
      */
@@ -143,21 +146,26 @@ public class WorkshopRepository {
         @CacheEvict(value = "workshop-unlock-progress", allEntries = true)
     })
     public void updateLevel(long workshopItemId, int newLevel) {
-        Integer oldLevel = jdbc.queryForObject(
-                "SELECT COALESCE(current_level, 0) FROM workshop_item_state WHERE workshop_item_id = ?",
-                Integer.class, workshopItemId);
+        Map<String, Object> item = jdbc.queryForMap("""
+                SELECT wi.max_level, wi.name, wi.is_plus, COALESCE(wis.current_level, 0) AS current_level
+                FROM workshop_item wi
+                LEFT JOIN workshop_item_state wis ON wis.workshop_item_id = wi.id
+                WHERE wi.id = ?
+                """, workshopItemId);
+        int maxLevel = ((Number) item.get("max_level")).intValue();
+        int oldLevel = ((Number) item.get("current_level")).intValue();
+        int clampedLevel = Math.min(Math.max(newLevel, 0), maxLevel);
 
         jdbc.update("""
                 INSERT INTO workshop_item_state (workshop_item_id, current_level) VALUES (?,?)
                 ON CONFLICT(workshop_item_id) DO UPDATE SET current_level = excluded.current_level
-                """, workshopItemId, newLevel);
+                """, workshopItemId, clampedLevel);
 
-        if (oldLevel != null && newLevel != oldLevel) {
-            var row = jdbc.queryForMap("SELECT name, is_plus FROM workshop_item WHERE id = ?", workshopItemId);
-            String name    = (String) row.get("name");
-            boolean isPlus = ((Number) row.get("is_plus")).intValue() == 1;
+        if (clampedLevel != oldLevel) {
+            String name    = (String) item.get("name");
+            boolean isPlus = ((Number) item.get("is_plus")).intValue() == 1;
             pendingRepo.record(isPlus ? "WORKSHOP_PLUS" : "WORKSHOP",
-                    name, String.valueOf(oldLevel), String.valueOf(newLevel), null);
+                    name, String.valueOf(oldLevel), String.valueOf(clampedLevel), null);
         }
     }
 
