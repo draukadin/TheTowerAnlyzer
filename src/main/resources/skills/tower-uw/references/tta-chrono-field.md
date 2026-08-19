@@ -110,18 +110,31 @@ Use `get_tower_state` for current CF levels and stones-to-max before making reco
 
 ---
 
-## Perma-CF
+## Perma-CF (pCF)
 
-When CF cooldown ≤ CF duration, a new CF activation begins before or as the previous one ends —
-keeping enemies permanently slowed and the damage reduction permanently active. At full max
-investment (70s duration, 60s cooldown), there is a 10-second window where two CF activations
-overlap simultaneously. True perma-CF is achievable before max investment.
+**pCF = Permanent Chrono Field.** When Cooldown ≤ Duration, a new CF activation begins before or
+as the previous one ends — keeping enemies permanently slowed (and, once unlocked, the damage
+reduction permanently active) rather than cycling on and off. If Duration exceeds Cooldown by
+enough, multiple CF activations can overlap simultaneously for the difference between the two.
+
+At full max investment (70s duration, 60s cooldown), there is a 10-second window where two CF
+activations overlap. True pCF is achievable before max investment — see the Galaxy Compressor
+path below for how to get there faster via recovery-package procs rather than pure stone spend
+or via Core Module sub stats.
+
+Having the full 10-second window negates the effects of the Ultimate Weapons battle condition
 
 **Galaxy Compressor (GC) module**: The GC module reduces the cooldown of all UWs except Poison
 Swamp each time a recovery package is collected. Stacking recovery package chance via workshop,
 labs, and module sub-stats — combined with CF Duration lab investment — brings CF duration and
 cooldown close enough that a Mythic or Ancestral GC creates pseudo-pCF through frequent package
 procs. This is the primary path to perma-CF before fully maxing UW cooldown levels.
+
+**Core Module substats**: The Generator module has two substats that directly help with
+achieving pCF: `Chrono Field - Duration` and `Chrono Field - Cooldown`.  Both of these stats
+directly affect the CF Duration and Cooldown. The higher the rarity the greater the effect
+and results in needing fewer stones to achieve a pCF. See `references/tta-module-substats.md`
+for sub-stat details.
 
 Benefits at perma-CF:
 - Enemies take much longer to reach the wall or tower — they can be destroyed before dealing
