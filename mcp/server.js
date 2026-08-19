@@ -228,6 +228,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: 'object', properties: {} },
     },
     {
+      name: 'simulate_dissonance_boost',
+      description: 'Project the dissonance boost a tier would have at a hypothetical wave count, without changing any saved data. Every other tier keeps its real personal best; only the given tier is swapped for the hypothetical waves. Use this to find the breakeven wave count where one tier\'s dissonance boost overtakes another\'s (e.g. "what wave does T11 need to beat T10") by probing candidate values directly — the wave-to-boost curve is not linear (see DEPTH_CURVE), so it should not be extrapolated from a couple of data points.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tier:  { type: 'integer', description: 'Tier to simulate' },
+          type:  { type: 'string', enum: ['ATTACK', 'DEFENSE', 'UTILITY', 'UW'], description: 'Dissonance type. Use UTILITY for coin-bonus/farming questions.' },
+          waves: { type: 'integer', description: 'Hypothetical wave count for that tier/type' },
+        },
+        required: ['tier', 'type', 'waves'],
+      },
+    },
+    {
       name: 'get_version_history',
       description: 'Get tower version history. Add "changes" section for per-version change details.',
       inputSchema: {
@@ -689,6 +702,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_tier_pbs':
         return distillTierPbs(await fetchApi('/api/tier-pb'));
+
+      case 'simulate_dissonance_boost': {
+        const params = new URLSearchParams({ tier: args.tier, type: args.type, waves: args.waves });
+        return result(await fetchApi(`/api/tier-pb/simulate?${params}`));
+      }
 
       // ── Version history ───────────────────────────────────────────────────
 

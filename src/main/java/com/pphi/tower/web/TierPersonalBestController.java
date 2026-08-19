@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +91,47 @@ public class TierPersonalBestController {
         int waves = body.containsKey("waves") ? ((Number) body.get("waves")).intValue() : 0;
         repository.updateDissonanceWaves(tier, type, waves);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Projects the dissonance boost a tier would have at a hypothetical wave count, without
+     * writing it to the DB. Every other tier's real personal best still feeds the "others" pool,
+     * only {@code tier} is swapped for {@code waves}. Lets callers answer "what wave do I need to
+     * beat tier X" by probing this instead of extrapolating from the wave-to-boost curve, which is
+     * not linear (see {@link DissonanceBoostUtility#DEPTH_CURVE}).
+     */
+    @GetMapping("/simulate")
+    public Map<String, Object> simulateDissonance(
+            @RequestParam int tier,
+            @RequestParam DissonanceType type,
+            @RequestParam int waves) {
+        List<TierPb> rows = repository.findAll();
+        List<Integer> allWaves = new ArrayList<>(rows.stream()
+                .filter(r -> r.tier() != tier)
+                .map(r -> wavesFor(r, type))
+                .toList());
+        allWaves.add(waves);
+        int echoLevel = getEchoLevel(echoLabName(type));
+        BigDecimal boost = DissonanceBoostUtility.compute(waves, allWaves, echoLevel, type);
+        return Map.of("tier", tier, "type", type, "waves", waves, "boost", boost);
+    }
+
+    private static int wavesFor(TierPb r, DissonanceType type) {
+        return switch (type) {
+            case ATTACK -> r.attackWaves();
+            case DEFENSE -> r.defenseWaves();
+            case UTILITY -> r.utilityWaves();
+            case UW -> r.uwWaves();
+        };
+    }
+
+    private static String echoLabName(DissonanceType type) {
+        return switch (type) {
+            case ATTACK -> "Dissonant Echo - Attack";
+            case DEFENSE -> "Dissonant Echo - Defense";
+            case UTILITY -> "Dissonant Echo - Utility";
+            case UW -> "Dissonant Echo - Ultimate Weapons";
+        };
     }
 
     private int getEchoLevel(String labName) {
