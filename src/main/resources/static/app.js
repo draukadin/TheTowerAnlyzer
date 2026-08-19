@@ -193,7 +193,7 @@ function showView(view){
     shards:'grp-modules',modules:'grp-modules',
     uw:'grp-upgrades',workshop:'grp-upgrades',guardian:'grp-upgrades',bots:'grp-upgrades',cards:'grp-upgrades',
     relics:'grp-collectibles',cosmetics:'grp-collectibles',
-    currencies:'grp-meta',tierpb:'grp-meta',tournament:'grp-meta',
+    currencies:'grp-meta',tierpb:'grp-meta',tournament:'grp-meta',coinbonus:'grp-meta',
     admin:null
   };
   // Close any open dropdown
@@ -219,6 +219,7 @@ function showView(view){
   else if(view==='cosmetics')renderCosmeticsView();
   else if(view==='currencies')renderCurrenciesView();
   else if(view==='tierpb')renderTierPbView();
+  else if(view==='coinbonus')renderCoinBonusView();
   else if(view==='workshop')renderWorkshopView();
   else if(view==='cards')renderCardsView();
   else if(view==='bots')renderBotsView();
@@ -1504,7 +1505,7 @@ async function setTargetLevel(statId,level){
 const MOD_TYPE_COLOR={Cannon:'var(--orange)',Generator:'var(--green)',Armor:'var(--accent)',Core:'var(--accent2)'};
 const MOD_RARITIES=['Epic','Epic+','Legendary','Legendary+','Mythic','Mythic+','Ancestral'];
 const MOD_COPY_RARITIES=['Epic','Epic+','Legendary','Legendary+','Mythic','Mythic+'];
-const MOD_SUB_RARITIES=['Common','Rare','Epic','Legendary','Mythic','Ancestral'];
+const MOD_SUB_RARITIES=['Common','Rare','Rare+','Epic','Epic+','Legendary','Legendary+','Mythic','Mythic+','Ancestral'];
 
 function modRarityColor(rarity){
   if(rarity==='Epic'||rarity==='Epic+') return 'var(--accent2)';
@@ -3533,6 +3534,110 @@ async function addTierPbRow() {
   const nextTier = rows.length ? Math.max(...rows.map(r => r.tier)) + 1 : 1;
   await fetch(`${API}/tier-pb/${nextTier}`, { method: 'POST' });
   await renderTierPbView();
+}
+
+// ── Coin Bonus Calculator ────────────────────────────────────────────────
+let coinBonusTier = null;
+let coinBonusPresetId = 1;
+let coinBonusModulePreset = 'Farming';
+
+async function renderCoinBonusView() {
+  const main = document.getElementById('mainContent');
+  main.innerHTML = `
+    <div style="max-width:640px">
+      <div style="margin-bottom:1.25rem">
+        <div class="report-title">Coin Bonus Calculator</div>
+        <div style="color:var(--muted);font-size:13px">Every multiplicative source of coin bonus, combined — mirrors the in-game "All Coins Bonuses" screen</div>
+      </div>
+      <div style="display:flex;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Tier</label>
+          <select class="form-input" id="cbTierSel" onchange="onCoinBonusSelectionChange()"></select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Card Preset</label>
+          <select class="form-input" id="cbPresetSel" onchange="onCoinBonusSelectionChange()"></select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Module Preset</label>
+          <select class="form-input" id="cbModulePresetSel" onchange="onCoinBonusSelectionChange()">
+            ${MOD_PRESETS.map(p => `<option value="${p}" ${p===coinBonusModulePreset?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div id="cbIapRow" style="display:flex;gap:1.5rem;margin-bottom:1.25rem;flex-wrap:wrap"></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--surface);border-radius:var(--radius);overflow:hidden">
+        <tbody id="cbFactorRows">
+          <tr><td colspan="2" style="padding:2rem;text-align:center;color:var(--muted)">Loading…</td></tr>
+        </tbody>
+        <tfoot>
+          <tr style="border-top:2px solid var(--border2);background:var(--surface2)">
+            <td style="padding:10px 12px;font-weight:700">Total bonus</td>
+            <td id="cbTotal" style="padding:10px 12px;text-align:right;font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--accent)">—</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  try {
+    const [tierPb, presets, iap] = await Promise.all([
+      fetch(`${API}/tier-pb`).then(r => r.json()),
+      fetch(`${API}/cards/presets`).then(r => r.json()),
+      fetch(`${API}/iap-purchases`).then(r => r.json())
+    ]);
+
+    const tiers = tierPb.tiers || [];
+    if (coinBonusTier === null) coinBonusTier = tiers.length ? tiers[0].tier : 1;
+    document.getElementById('cbTierSel').innerHTML = tiers.length
+      ? tiers.map(t => `<option value="${t.tier}" ${t.tier===coinBonusTier?'selected':''}>T${t.tier}</option>`).join('')
+      : `<option value="${coinBonusTier}">T${coinBonusTier}</option>`;
+
+    if (!presets.some(p => p.id === coinBonusPresetId)) coinBonusPresetId = presets.length ? presets[0].id : 1;
+    document.getElementById('cbPresetSel').innerHTML = presets.map(p =>
+      `<option value="${p.id}" ${p.id===coinBonusPresetId?'selected':''}>${p.name}</option>`).join('');
+
+    document.getElementById('cbIapRow').innerHTML = iap.map(p => `
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="checkbox" ${p.owned?'checked':''} onchange="saveIapOwned('${p.key}', this.checked)">
+        ${p.displayName} <span style="color:var(--muted);font-family:var(--mono)">x${p.multiplier.toFixed(2)}</span>
+      </label>`).join('');
+
+    await loadCoinBonus();
+  } catch(e) {
+    document.getElementById('cbFactorRows').innerHTML =
+      `<tr><td colspan="2" style="padding:2rem;text-align:center;color:var(--red)">Failed to load: ${e.message}</td></tr>`;
+  }
+}
+
+function onCoinBonusSelectionChange() {
+  coinBonusTier = parseInt(document.getElementById('cbTierSel').value, 10);
+  coinBonusPresetId = parseInt(document.getElementById('cbPresetSel').value, 10);
+  coinBonusModulePreset = document.getElementById('cbModulePresetSel').value;
+  loadCoinBonus();
+}
+
+async function saveIapOwned(key, owned) {
+  await fetch(`${API}/iap-purchases/${encodeURIComponent(key)}/owned`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({owned})
+  });
+  await loadCoinBonus();
+}
+
+async function loadCoinBonus() {
+  const rowsEl = document.getElementById('cbFactorRows');
+  try {
+    const data = await fetch(`${API}/coin-bonus?tier=${coinBonusTier}&presetId=${coinBonusPresetId}&modulePreset=${encodeURIComponent(coinBonusModulePreset)}`).then(r => r.json());
+    rowsEl.innerHTML = data.factors.map(f => `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:8px 12px">${f.label}</td>
+        <td style="padding:8px 12px;text-align:right;font-family:var(--mono);${f.active?'':'color:var(--muted)'}">
+          ${f.active ? 'x' + f.multiplier.toFixed(3) : 'Inactive'}
+        </td>
+      </tr>`).join('');
+    document.getElementById('cbTotal').textContent = 'x' + data.totalBonus.toFixed(2);
+  } catch(e) {
+    rowsEl.innerHTML = `<tr><td colspan="2" style="padding:2rem;text-align:center;color:var(--red)">Failed to load: ${e.message}</td></tr>`;
+  }
 }
 
 let verChangeRows = [];

@@ -35,7 +35,8 @@ public class StatBreakdownRepository {
             Double workshopValue,
             Double workshopPlusValue,
             Double relicBonus,
-            List<String> moduleSubstatRarities
+            List<String> moduleSubstatRarities,
+            Double moduleSubstatValue
     ) {}
 
     // ── Query ─────────────────────────────────────────────────────────────────
@@ -145,10 +146,19 @@ public class StatBreakdownRepository {
                 GROUP BY r.stat_key
                 """);
 
-        // Module substats rarities from modules assigned to at least one preset
+        // Module substats rarities (+ computed value where a level curve is known) from modules
+        // assigned to at least one preset. Only "coins_kill_bonus" has a value curve
+        // (module_coin_bonus_level_value); it's keyed by the owning module's own (rarity, level)
+        // from module_player_state, not the substat's independently-tracked substat_rarity.
         List<Map<String, Object>> substatRows = jdbc.queryForList("""
-                SELECT mps.substat_key AS stat_key, mps.substat_rarity
+                SELECT mps.substat_key AS stat_key, mps.substat_rarity,
+                       mcblv.value AS substat_value
                 FROM module_player_substat mps
+                LEFT JOIN module_player_state mpst ON mpst.module_def_id = mps.module_def_id
+                LEFT JOIN module_coin_bonus_level_value mcblv
+                    ON mps.substat_key = 'coins_kill_bonus'
+                    AND mcblv.module_rarity = mpst.rarity
+                    AND mcblv.level = COALESCE(mpst.level, 0)
                 WHERE EXISTS (
                     SELECT 1 FROM module_preset_assignment mpa
                     WHERE mpa.module_def_id = mps.module_def_id
@@ -173,9 +183,13 @@ public class StatBreakdownRepository {
         }
 
         Map<String, List<String>> substatMap = new LinkedHashMap<>();
+        Map<String, Double> substatValueMap = new LinkedHashMap<>();
         for (Map<String, Object> row : substatRows) {
             String key = (String) row.get("stat_key");
             substatMap.computeIfAbsent(key, k -> new ArrayList<>()).add((String) row.get("substat_rarity"));
+            Object value = row.get("substat_value");
+            if (value == null) continue;
+            substatValueMap.merge(key, ((Number) value).doubleValue(), Double::sum);
         }
 
         Set<String> allKeys = new LinkedHashSet<>();
@@ -191,9 +205,45 @@ public class StatBreakdownRepository {
                     wsRegular.get(key),
                     wsPlus.get(key),
                     relicMap.get(key),
-                    substatMap.getOrDefault(key, List.of())
+                    substatMap.getOrDefault(key, List.of()),
+                    substatValueMap.get(key)
             ));
         }
         return result;
+    }
+
+    /**
+     * Sum of {@code module_coin_bonus_level_value} for the given stat key, scoped to modules
+     * assigned to the given preset (Primary and Assist slots both count — Assist modules contribute
+     * their own sub-stats in-game too). Unlike {@link #getSummary()}, which aggregates a module's
+     * substat across every preset it's ever been assigned to, this reflects a single specific
+     * loadout (e.g. "Farming") — used by {@link com.pphi.tower.service.CoinBonusService} so the
+     * Modules factor doesn't sum contributions from unrelated Tournament/Testing modules.
+     */
+    public Double getModuleSubstatValueForPreset(String statKey, String modulePreset) {
+        // The growth curve is keyed by the owning module's own rarity/level (module_player_state),
+        // not the substat's independently-tracked substat_rarity — a substat's roll rarity only
+        // gates which slot it occupies, but this stat's value scales with the module itself.
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT mcblv.value AS substat_value
+                FROM module_player_substat mps
+                LEFT JOIN module_player_state mpst ON mpst.module_def_id = mps.module_def_id
+                LEFT JOIN module_coin_bonus_level_value mcblv
+                    ON mcblv.module_rarity = mpst.rarity
+                    AND mcblv.level = COALESCE(mpst.level, 0)
+                WHERE mps.substat_key = ?
+                  AND EXISTS (
+                      SELECT 1 FROM module_preset_assignment mpa
+                      WHERE mpa.module_def_id = mps.module_def_id AND mpa.preset = ?
+                  )
+                """, statKey, modulePreset);
+
+        Double sum = null;
+        for (Map<String, Object> row : rows) {
+            Object value = row.get("substat_value");
+            if (value == null) continue;
+            sum = (sum == null ? 0.0 : sum) + ((Number) value).doubleValue();
+        }
+        return sum;
     }
 }

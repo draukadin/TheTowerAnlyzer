@@ -1,8 +1,11 @@
 package com.pphi.tower.web;
 
 import com.pphi.tower.repository.UwRepository;
+import com.pphi.tower.repository.UwRepository.UwLevelsData;
 import com.pphi.tower.repository.UwRepository.UwPlayerData;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -23,6 +26,13 @@ public class UwController {
     @GetMapping
     public List<UwPlayerData> getAllUwState() {
         return uwRepository.getAllUwState();
+    }
+
+    @GetMapping("/{uwCode}/levels")
+    public UwLevelsData getStatLevels(@PathVariable String uwCode) {
+        UwLevelsData data = uwRepository.getStatLevels(uwCode.toUpperCase());
+        if (data == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "UW not found: " + uwCode);
+        return data;
     }
 
     @PutMapping("/{uwId}/unlocked")

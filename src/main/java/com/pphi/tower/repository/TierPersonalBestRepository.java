@@ -34,6 +34,14 @@ public class TierPersonalBestRepository {
         return jdbc.query("SELECT * FROM tier_personal_best ORDER BY tier", ROW_MAPPER);
     }
 
+    /** The Difficulty Tier coin multiplier for a tier, if seeded (see {@code tier_coin_multiplier}). */
+    public java.util.Optional<Double> findCoinMultiplier(int tier) {
+        List<Double> rows = jdbc.query(
+                "SELECT multiplier FROM tier_coin_multiplier WHERE tier = ?",
+                (rs, i) -> rs.getDouble("multiplier"), tier);
+        return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(rows.get(0));
+    }
+
     @CacheEvict(value = "tier-pb", allEntries = true)
     public void createTier(int tier) {
         jdbc.update("""

@@ -42,10 +42,13 @@ public class ContentPatchService {
     private static final String WORKSHOP_PLUS_COSTS  = "workshop_plus_costs.json";
     private static final String WORKSHOP_VALUES      = "workshop_values.json";
     private static final String ENHANCEMENT_VALUES   = "enhancement_values.json";
+    private static final String TIER_COIN_MULTIPLIER = "tier_coin_multiplier.json";
+    private static final String MODULE_SUBSTAT_VALUES = "module_substat_values.json";
 
     private static final List<String> CONTENT_FILES = List.of(
             LAB_DEFINITIONS, LAB_COSTS, WORKSHOP_DEFINITIONS,
-            WORKSHOP_COSTS, WORKSHOP_PLUS_COSTS, WORKSHOP_VALUES, ENHANCEMENT_VALUES);
+            WORKSHOP_COSTS, WORKSHOP_PLUS_COSTS, WORKSHOP_VALUES, ENHANCEMENT_VALUES,
+            TIER_COIN_MULTIPLIER, MODULE_SUBSTAT_VALUES);
 
     private final AwsProperties aws;
     private final S3ContentPatchRepository repo;
@@ -129,12 +132,17 @@ public class ContentPatchService {
                 ContentDefinitions.readNumericMap(resourceFor(files.get(WORKSHOP_VALUES)));
         Map<String, Map<String, Double>> enhancementValues =
                 ContentDefinitions.readNumericMap(resourceFor(files.get(ENHANCEMENT_VALUES)));
+        Map<String, Double> tierCoinMultipliers =
+                ContentDefinitions.readFlatNumericMap(resourceFor(files.get(TIER_COIN_MULTIPLIER)));
+        Map<String, Map<String, Map<String, Double>>> moduleSubstatValues =
+                ContentDefinitions.readModuleSubstatValues(resourceFor(files.get(MODULE_SUBSTAT_VALUES)));
 
         validate(labDefs, workshopDefs);
 
         ContentPatchApplier.Summary summary = applier.apply(
                 manifest.contentVersion(), labDefs, labCosts, workshopDefs,
-                workshopCosts, workshopPlusCosts, workshopValues, enhancementValues);
+                workshopCosts, workshopPlusCosts, workshopValues, enhancementValues,
+                tierCoinMultipliers, moduleSubstatValues);
 
         for (String filename : CONTENT_FILES) {
             repo.deleteObject(bucket, prefix + filename);

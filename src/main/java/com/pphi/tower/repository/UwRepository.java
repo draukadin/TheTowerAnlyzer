@@ -23,6 +23,18 @@ public class UwRepository {
 
     // ── DTOs ──────────────────────────────────────────────────────────────────
 
+    public record StatLevelEntry(int level, double value, Integer stonesToNext) {}
+
+    public record UwStatLevels(
+            int statId,
+            String statKey,
+            String label,
+            int currentLevel,
+            int maxLevel,
+            List<StatLevelEntry> levels) {}
+
+    public record UwLevelsData(String code, String name, List<UwStatLevels> stats) {}
+
     public record UwStatPlayerData(
             int statId,
             String statKey,
@@ -149,6 +161,67 @@ public class UwRepository {
         }
 
         return new ArrayList<>(byId.values());
+    }
+
+    @Cacheable("uw-state")
+    public UwLevelsData getStatLevels(String uwCode) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT
+                    u.code,
+                    u.name,
+                    s.id          AS stat_id,
+                    s.stat_key,
+                    s.label,
+                    s.max_level,
+                    s.sort_order,
+                    COALESCE(pl.current_level, 0) AS current_level,
+                    lv.level,
+                    lv.value,
+                    lv.stones_to_next
+                FROM uw u
+                JOIN uw_stat s ON s.uw_id = u.id
+                JOIN uw_stat_level_value lv ON lv.uw_stat_id = s.id
+                LEFT JOIN uw_stat_player_level pl ON pl.uw_stat_id = s.id
+                WHERE UPPER(u.code) = UPPER(?)
+                ORDER BY s.sort_order, lv.level
+                """, uwCode);
+
+        if (rows.isEmpty()) return null;
+
+        String code = (String) rows.get(0).get("code");
+        String name = (String) rows.get(0).get("name");
+
+        Map<Integer, UwStatLevels> statMap = new LinkedHashMap<>();
+        Map<Integer, List<StatLevelEntry>> levelsByStatId = new LinkedHashMap<>();
+
+        for (Map<String, Object> row : rows) {
+            int statId = ((Number) row.get("stat_id")).intValue();
+
+            if (!statMap.containsKey(statId)) {
+                List<StatLevelEntry> levelList = new ArrayList<>();
+                statMap.put(statId, new UwStatLevels(
+                        statId,
+                        (String) row.get("stat_key"),
+                        (String) row.get("label"),
+                        ((Number) row.get("current_level")).intValue(),
+                        ((Number) row.get("max_level")).intValue(),
+                        levelList
+                ));
+                levelsByStatId.put(statId, levelList);
+            }
+
+            Integer stonesToNext = row.get("stones_to_next") != null
+                    ? ((Number) row.get("stones_to_next")).intValue()
+                    : null;
+
+            levelsByStatId.get(statId).add(new StatLevelEntry(
+                    ((Number) row.get("level")).intValue(),
+                    ((Number) row.get("value")).doubleValue(),
+                    stonesToNext
+            ));
+        }
+
+        return new UwLevelsData(code, name, new ArrayList<>(statMap.values()));
     }
 
     // ── Writes ────────────────────────────────────────────────────────────────

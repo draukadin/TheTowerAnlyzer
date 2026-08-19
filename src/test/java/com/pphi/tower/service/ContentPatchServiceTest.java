@@ -133,5 +133,7 @@ class ContentPatchServiceTest {
         when(repo.downloadAsString(BUCKET, PREFIX + "workshop_plus_costs.json")).thenReturn("{}");
         when(repo.downloadAsString(BUCKET, PREFIX + "workshop_values.json")).thenReturn("{}");
         when(repo.downloadAsString(BUCKET, PREFIX + "enhancement_values.json")).thenReturn("{}");
+        when(repo.downloadAsString(BUCKET, PREFIX + "tier_coin_multiplier.json")).thenReturn("{}");
+        when(repo.downloadAsString(BUCKET, PREFIX + "module_substat_values.json")).thenReturn("{}");
     }
 }

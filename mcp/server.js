@@ -322,6 +322,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'get_uw_stat_levels',
+      description: 'Get the full level-by-level stone cost and stat value progression for all stats of a given Ultimate Weapon. Use to compare cost curves between stats and plan optimal upgrade order — e.g. "when does CF Speed Reduction become more expensive than CF Duration?" or "build a CF stone spend plan". Returns current level, current value, and an upgrades table ([from_level, stones_cost, value_after]) for every future level of each stat.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uwCode: {
+            type: 'string',
+            description: 'UW code (e.g. "CF" for Chrono Field, "GT" for Golden Tower, "SP" for Spotlight, "CL", "SM", "DW", "ILM", "PS", "BH").',
+          },
+        },
+        required: ['uwCode'],
+      },
+    },
+    {
       name: 'get_perks',
       description: 'Get the full perk catalog: id, name, type (Standard/UW/TradeOff), and max picks per run.',
       inputSchema: { type: 'object', properties: {} },
@@ -372,6 +386,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: 'object',
         properties: {},
+      },
+    },
+    {
+      name: 'get_coin_bonus',
+      description: 'Get the full Coin Bonus breakdown for a tier: Disable Ads, Starter Pack, Epic Pack, Active Cards, Modules, Difficulty Tier, Themes Bonus, Relics Bonus, Enhancement Bonus, and Dissonant Coin Bonus, plus the combined Total Bonus. Mirrors the in-game "All Coins Bonuses" screen.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tier:          { type: 'integer', description: 'Difficulty tier to compute the bonus for' },
+          presetId:      { type: 'integer', description: 'Card preset id to check for the equipped Coins card (default: 1)' },
+          modulePreset:  { type: 'string', description: 'Module preset to check for the Coins/Kill Bonus substat: "Farming", "Tournament", or "Testing" (default: "Farming"). Checks both Primary and Assist slots of that preset.' },
+        },
+        required: ['tier'],
+      },
+    },
+    {
+      name: 'get_coin_enhancement_payback',
+      description: 'Compute how long it takes to recoup the coin cost of buying N more levels of the Workshop+ "Coin Bonus +" enhancement, given recent average coin income. Answers "if I buy N levels costing Y coins, how long until it pays for itself?"',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          levels:    { type: 'integer', description: 'Number of additional Coin Bonus + levels to buy' },
+          windowDays: { type: 'integer', description: 'Rolling window in days for average coin income (default: 30)' },
+        },
+        required: ['levels'],
       },
     },
     {
@@ -451,6 +490,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (args.safetyBuffer != null) params.set('safetyBuffer', args.safetyBuffer);
         const qs = params.toString();
         return distillLabSpeedAffordability(await fetchApi(`/api/analysis/lab-speed${qs ? `?${qs}` : ''}`));
+      }
+
+      // ── Coin bonus ────────────────────────────────────────────────────────
+
+      case 'get_coin_bonus': {
+        const params = new URLSearchParams({ tier: args.tier });
+        if (args.presetId != null) params.set('presetId', args.presetId);
+        if (args.modulePreset != null) params.set('modulePreset', args.modulePreset);
+        return result(await fetchApi(`/api/coin-bonus?${params}`));
+      }
+
+      case 'get_coin_enhancement_payback': {
+        const params = new URLSearchParams({ levels: args.levels });
+        if (args.windowDays != null) params.set('days', args.windowDays);
+        return result(await fetchApi(`/api/coin-bonus/enhancement-payback?${params}`));
       }
 
       // ── Recent runs ───────────────────────────────────────────────────────
@@ -819,6 +873,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           incomePerMob: round(incomePerMob, 2),
           runsUsed: recentRuns.length,
         });
+      }
+
+      // ── UW stat levels ────────────────────────────────────────────────────
+
+      case 'get_uw_stat_levels': {
+        const uwCode = args.uwCode;
+        if (!uwCode) throw new Error('uwCode is required');
+        const data = await fetchApi(`/api/uw/${encodeURIComponent(uwCode.toUpperCase())}/levels`);
+        return distillUwStatLevels(data);
       }
 
       // ── SL coverage efficiency ────────────────────────────────────────────
@@ -1868,6 +1931,31 @@ function distillSlCoverageEfficiency(d) {
 
   out.recommendation = d.recommendation;
   return result(out);
+}
+
+// ── Distillation: UW stat levels ─────────────────────────────────────────────
+
+function distillUwStatLevels(d) {
+  return result({
+    uw:   d.code,
+    name: d.name,
+    stats: d.stats.map(s => {
+      const lvMap = new Map((s.levels ?? []).map(lv => [lv.level, lv]));
+      const currentEntry = lvMap.get(s.currentLevel);
+      const upgrades = (s.levels ?? [])
+        .filter(lv => lv.level >= s.currentLevel && lv.stonesToNext != null)
+        .map(lv => [lv.level, lv.stonesToNext, lvMap.get(lv.level + 1)?.value ?? null]);
+      return {
+        label:         s.label,
+        key:           s.statKey,
+        current_level: s.currentLevel,
+        current_value: currentEntry?.value ?? null,
+        max_level:     s.maxLevel,
+        // Each entry: [from_level, stones_to_next_level, value_after_upgrade]
+        upgrades,
+      };
+    }),
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
